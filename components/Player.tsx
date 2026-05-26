@@ -1,3 +1,4 @@
+'use client'
 import Hls from "hls.js";
 import React, { useEffect, useRef } from "react";
 

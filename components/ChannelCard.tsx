@@ -1,176 +1,227 @@
+"use client";
+
 import { Channel } from "@/types/DataTypes";
-import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
+import Image from "next/image";
 import { memo, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { IoHeart } from "react-icons/io5";
 
 const ChannelCard: React.FC<{
   channel: Channel;
   isFavorite: boolean;
   toggleFavorite: (channel: Channel) => void;
   onSelect: (channel: Channel) => void;
-  hasTVPreferredFocus?: boolean;
   isPlaying?: boolean;
-}> = memo(
-  ({
-    channel,
-    isFavorite,
-    toggleFavorite,
-    onSelect,
-    hasTVPreferredFocus,
-    isPlaying,
-  }) => {
-    const [isFocused, setIsFocused] = useState(false);
+}> = memo(({ channel, isFavorite, toggleFavorite, onSelect, isPlaying }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [isHover, setIsHover] = useState(false);
 
-    const bg = isPlaying ? "#0B2A2A" : isFocused ? "#0F1F3A" : "#0B1020";
+  const active = isPlaying || isFocused;
+  const hover = isHover;
 
-    const glow = isPlaying ? "#00F5D4" : isFocused ? "#7CFF6B" : "transparent";
+  return (
+    <div
+      style={{
+        marginTop: 10,
+        marginLeft: 12,
+        marginRight: 12,
+        borderRadius: 18,
 
-    return (
-      <View
+        transform: hover
+          ? "translateY(-2px) scale(1.01)"
+          : "translateY(0px) scale(1)",
+
+        transition: "all 0.18s ease",
+      }}
+    >
+      {/* CARD */}
+      <div
+        onMouseEnter={() => setIsHover(true)}
+        onMouseLeave={() => setIsHover(false)}
         style={{
-          marginVertical: 6,
           borderRadius: 18,
-          overflow: "hidden",
-          marginHorizontal: 12,
+
+          background:
+            "linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))",
+
+          border: `1px solid ${
+            isPlaying ? "#00F5D4" : isHover ? "#2D3F66" : "#1F2A44"
+          }`,
+
+          boxShadow: isPlaying
+            ? "0 0 22px rgba(0,245,212,0.20)"
+            : isHover
+              ? "0 18px 40px rgba(0,0,0,0.65), 0 0 18px rgba(0,245,212,0.08)"
+              : "0 8px 20px rgba(0,0,0,0.35)",
+
+          transform: isHover
+            ? "translateY(-4px) scale(1.015)"
+            : "translateY(0px) scale(1)",
+
+          transition: "all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)",
+          cursor: "pointer",
         }}
       >
-        {/* GLASS BACKGROUND BORDER EFFECT */}
-        <View
+        {/* SHINE EFFECT */}
+        <div
           style={{
+            position: "absolute",
+            inset: 0,
             borderRadius: 18,
-            borderWidth: 1,
-            borderColor: isPlaying ? "#00F5D4" : "#1F2A44",
-            backgroundColor: bg,
-            shadowColor: glow,
-            shadowOpacity: isPlaying ? 0.6 : 0,
-            shadowRadius: 12,
-            elevation: isPlaying ? 6 : 0,
+            pointerEvents: "none",
+            background: isHover
+              ? "linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.06), transparent 70%)"
+              : "transparent",
+            transform: isHover ? "translateX(100%)" : "translateX(-100%)",
+            transition: "transform 0.6s ease",
+          }}
+        />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => onSelect(channel)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: 12,
+            gap: 12,
           }}
         >
-          <TouchableOpacity
-            onPress={() => onSelect(channel)}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            hasTVPreferredFocus={hasTVPreferredFocus}
-            activeOpacity={0.85}
+          {/* LOGO */}
+          <div
             style={{
-              flexDirection: "row",
+              width: 52,
+              height: 52,
+              borderRadius: 14,
+              backgroundColor: "#111C33",
+              display: "flex",
               alignItems: "center",
-              padding: 12,
+              justifyContent: "center",
+              overflow: "hidden",
+              border: "1px solid #1F2A44",
+              flexShrink: 0,
+
+              transform: hover ? "scale(1.05)" : "scale(1)",
+              transition: "all 0.18s ease",
             }}
           >
-            {/* LOGO */}
-            <View
-              style={{
-                width: 58,
-                height: 58,
-                borderRadius: 14,
-                backgroundColor: "#111C33",
-                justifyContent: "center",
-                alignItems: "center",
-                overflow: "hidden",
-                borderWidth: 1,
-                borderColor: "#1F2A44",
-              }}
-            >
-              {channel.attributes?.["tvg-logo"] ? (
-                <Image
-                  source={{ uri: channel.attributes["tvg-logo"] }}
-                  style={{ width: 50, height: 50 }}
-                  contentFit="contain"
-                />
-              ) : (
-                <Text
-                  style={{
-                    color: "#00F5D4",
-                    fontSize: 18,
-                    fontWeight: "bold",
-                  }}
-                >
-                  {channel.name?.slice(0, 2).toUpperCase() || "TV"}
-                </Text>
-              )}
-            </View>
-
-            {/* INFO */}
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text
-                numberOfLines={1}
+            {channel.attributes?.["tvg-logo"] ? (
+              <Image
+                src={channel.attributes["tvg-logo"]}
+                width={48}
+                height={48}
+                alt={channel.name || "channel"}
                 style={{
-                  color: "#EAF2FF",
-                  fontSize: 15,
-                  fontWeight: "700",
+                  objectFit: "contain",
+                  transition: "all 0.2s ease",
                 }}
-              >
-                {channel.name}
-              </Text>
-
-              <Text
-                numberOfLines={1}
-                style={{
-                  color: "#6F7AA6",
-                  fontSize: 12,
-                  marginTop: 3,
-                }}
-              >
-                {channel.attributes?.["group-title"] || "Unknown Category"}
-              </Text>
-
-              {/* LIVE / PLAYING BADGE */}
-              {isPlaying && (
-                <View
-                  style={{
-                    marginTop: 6,
-                    flexDirection: "row",
-                    alignItems: "center",
-                  }}
-                >
-                  <View
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: 3,
-                      backgroundColor: "#00F5D4",
-                      marginRight: 6,
-                    }}
-                  />
-                  <Text
-                    style={{
-                      color: "#00F5D4",
-                      fontSize: 11,
-                      fontWeight: "600",
-                    }}
-                  >
-                    NOW PLAYING
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {/* FAVORITE BUTTON */}
-            <TouchableOpacity
-              onPress={() => toggleFavorite(channel)}
-              style={{
-                padding: 8,
-                borderRadius: 12,
-                backgroundColor: "#111C33",
-                borderWidth: 1,
-                borderColor: "#1F2A44",
-              }}
-            >
-              <Ionicons
-                name={isFavorite ? "heart" : "heart-outline"}
-                size={18}
-                color={isFavorite ? "#FF3B6B" : "#6F7AA6"}
               />
-            </TouchableOpacity>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  },
-);
+            ) : (
+              <span style={{ color: "#00F5D4", fontWeight: 700 }}>
+                {channel.name?.slice(0, 2).toUpperCase() || "TV"}
+              </span>
+            )}
+          </div>
+
+          {/* INFO */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                color: "#EAF2FF",
+                fontSize: 15,
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {channel.name}
+            </div>
+
+            <div
+              style={{
+                color: "#6F7AA6",
+                fontSize: 12,
+                marginTop: 3,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {channel.attributes?.["group-title"] || "Unknown Category"}
+            </div>
+
+            {/* LIVE */}
+            <div
+              style={{
+                marginTop: 6,
+                height: 14,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 10,
+                  backgroundColor: isPlaying ? "#00F5D4" : "transparent",
+                  marginRight: 6,
+                  boxShadow: isPlaying
+                    ? "0 0 10px rgba(0,245,212,0.8)"
+                    : "none",
+                }}
+              />
+
+              <span
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: isPlaying ? "#00F5D4" : "transparent",
+                }}
+              >
+                NOW PLAYING
+              </span>
+            </div>
+          </div>
+
+          {/* FAVORITE BUTTON */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(channel);
+            }}
+            style={{
+              width: 42,
+              height: 42,
+              flexShrink: 0,
+              marginLeft: "auto",
+
+              borderRadius: 12,
+              background: isHover
+                ? "linear-gradient(145deg, #16223D, #0B1220)"
+                : "linear-gradient(145deg, #111C33, #0B1220)",
+
+              border: `1px solid ${isHover ? "#2A3A5F" : "#1F2A44"}`,
+
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+
+              transform: isHover ? "scale(1.08)" : "scale(1)",
+              transition: "all 0.18s ease",
+
+              cursor: "pointer",
+            }}
+          >
+            <IoHeart size={18} color={isFavorite ? "#FF3B6B" : "#6F7AA6"} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 ChannelCard.displayName = "ChannelCard";
 
