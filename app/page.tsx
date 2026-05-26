@@ -147,7 +147,7 @@ export default function IPTVWebFull() {
     if (playerMode === "vlc") {
       window?.electronAPI?.setWindowSize(420, 800);
       if (current) {
-        window?.electronAPI?.playInVLC(current?.location);
+        window?.electronAPI?.playInVLC(current?.location ?? "");
       }
     } else {
       window?.electronAPI?.setWindowSize(1200, 800);
@@ -482,21 +482,62 @@ export default function IPTVWebFull() {
         {isIPTVOrg && activeFilters.category !== "All" && (
           <div
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: theme.accent,
-              padding: "4px 10px",
-              borderRadius: 20,
-              justifyContent: "center",
               display: "flex",
-              marginBottom: 10,
+              alignItems: "center",
+              gap: 8,
+              padding: "6px 12px",
+              borderRadius: 999,
+              background: `linear-gradient(135deg, ${theme.accent}, ${theme.accent}cc)`,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              transition: "all 0.2s ease",
+              cursor: "default",
+              width: "fit-content",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "scale(1.03)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "scale(1)";
             }}
           >
-            <span style={{ color: theme.card, marginRight: 6 }}>
+            <span
+              style={{
+                color: theme.card,
+                fontSize: 13,
+                fontWeight: 600,
+                letterSpacing: 0.3,
+                textTransform: "capitalize",
+              }}
+            >
               {activeFilters.category}
             </span>
-            <button onClick={() => setActiveFilters({ category: "All" })}>
-              <IoClose size={18} color={theme.danger} />
+
+            <button
+              onClick={() => setActiveFilters({ category: "All" })}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255,255,255,0.15)",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.25)";
+                e.currentTarget.style.transform = "rotate(90deg)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "rgba(255,255,255,0.15)";
+                e.currentTarget.style.transform = "rotate(0deg)";
+              }}
+            >
+              <IoClose size={14} color={theme.card} />
             </button>
           </div>
         )}
@@ -560,83 +601,136 @@ export default function IPTVWebFull() {
             zIndex: 9999,
           }}
         >
-          {/* MODAL BOX */}
           <div
             style={{
               width: "100%",
               maxWidth: 420,
               backgroundColor: theme.card,
               padding: 20,
-              borderRadius: 16,
+              borderRadius: 18,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
             }}
           >
-            {/* NAME INPUT */}
+            {/* INPUT NAME */}
             <input
               value={playlistName}
               onChange={(e) => setPlaylistName(e.target.value)}
-              placeholder="Name"
+              placeholder="Playlist Name"
               style={{
                 width: "100%",
                 backgroundColor: theme.card2,
                 padding: 12,
-                color: theme.span,
-                border: "1px solid #1F2A44",
+                color: "#fff",
+                border: "1px solid #2a3550",
                 borderRadius: 10,
                 outline: "none",
               }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = theme.accent;
+                e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.accent}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#2a3550";
+                e.currentTarget.style.boxShadow = "none";
+              }}
             />
 
-            {/* URL INPUT */}
+            {/* INPUT URL */}
             <input
               value={playlistUrl}
               onChange={(e) => setPlaylistUrl(e.target.value)}
-              placeholder="URL"
+              placeholder="Playlist URL"
               style={{
                 width: "100%",
                 backgroundColor: theme.card2,
                 padding: 12,
-                marginTop: 10,
-                color: theme.span,
-                border: "1px solid #1F2A44",
+                color: "#fff",
+                border: "1px solid #2a3550",
                 borderRadius: 10,
                 outline: "none",
+              }}
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = theme.accent;
+                e.currentTarget.style.boxShadow = `0 0 0 2px ${theme.accent}30`;
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = "#2a3550";
+                e.currentTarget.style.boxShadow = "none";
               }}
             />
 
             {/* ADD BUTTON */}
             <button
               onClick={addPlaylist}
+              disabled={!playlistName || !playlistUrl}
               style={{
                 width: "100%",
-                marginTop: 12,
-                padding: 12,
+                padding: "12px 14px",
                 borderRadius: 12,
-                backgroundColor: theme.accent,
-                border: "none",
-                fontWeight: "bold",
-                cursor: "pointer",
+                border: "1px solid rgba(255,255,255,0.08)",
+                fontWeight: 700,
+                cursor:
+                  !playlistName || !playlistUrl ? "not-allowed" : "pointer",
+                color: "#fff",
+                background:
+                  !playlistName || !playlistUrl
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0, 198, 255, 0.12)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                boxShadow:
+                  !playlistName || !playlistUrl
+                    ? "none"
+                    : "0 10px 25px rgba(0,0,0,0.35)",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) => {
+                if (playlistName && playlistUrl) {
+                  e.currentTarget.style.transform = "scale(1.03)";
+                  e.currentTarget.style.background = "rgba(0, 198, 255, 0.18)";
+                  e.currentTarget.style.border =
+                    "1px solid rgba(0, 198, 255, 0.35)";
+                  e.currentTarget.style.boxShadow =
+                    "0 12px 30px rgba(0,0,0,0.4)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "scale(1)";
+                e.currentTarget.style.background =
+                  !playlistName || !playlistUrl
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0, 198, 255, 0.12)";
+                e.currentTarget.style.border =
+                  "1px solid rgba(255,255,255,0.08)";
+                e.currentTarget.style.boxShadow =
+                  !playlistName || !playlistUrl
+                    ? "none"
+                    : "0 10px 25px rgba(0,0,0,0.35)";
               }}
             >
               ADD PLAYLIST
             </button>
+
+            {/* CLOSE */}
             <button
               onClick={() => setShowAdd(false)}
               style={{
                 width: "100%",
-                marginTop: 12,
                 padding: 12,
                 borderRadius: 12,
-                backgroundColor: theme.danger,
+                background: "linear-gradient(135deg, #ff4d4d, #b30000)",
                 border: "none",
-                fontWeight: "bold",
+                fontWeight: 700,
+                color: "#fff",
                 cursor: "pointer",
               }}
             >
               CLOSE
             </button>
           </div>
-
-          {/* CLOSE BUTTON */}
         </div>
       )}
       {showPlaylist && (
@@ -655,73 +749,132 @@ export default function IPTVWebFull() {
           <div
             style={{
               width: "100%",
-              maxWidth: 500,
+              maxWidth: 520,
               maxHeight: "80vh",
               backgroundColor: theme.card,
-              borderRadius: 16,
+              borderRadius: 18,
               overflowY: "auto",
-              padding: 10,
+              padding: 12,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
             }}
           >
-            {[...PREDEFINED, ...addedPlaylists].map((p) => (
-              <div
-                key={p.playlist}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: 12,
-                  borderBottom: `1px solid ${theme.border}`,
-                }}
-              >
-                {/* SELECT PLAYLIST */}
-                <button
-                  onClick={() => {
-                    setSelectedPlaylist(p);
-                    setShowPlaylist(false);
-                  }}
+            {[...PREDEFINED, ...addedPlaylists].map((p) => {
+              const isSelected = selectedPlaylist?.playlist === p.playlist;
+
+              return (
+                <div
+                  key={p.playlist}
                   style={{
-                    flex: 1,
-                    textAlign: "left",
-                    background: "transparent",
-                    border: "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    marginBottom: 6,
                     cursor: "pointer",
+
+                    background: isSelected
+                      ? `linear-gradient(135deg, ${theme.accent}20, rgba(255,255,255,0.03))`
+                      : "transparent",
+
+                    border: isSelected
+                      ? `1px solid ${theme.accent}55`
+                      : `1px solid ${theme.border}`,
+
+                    boxShadow: isSelected
+                      ? "0 10px 25px rgba(0,0,0,0.35)"
+                      : "none",
+
+                    transition: "all 0.2s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background =
+                        "rgba(255,255,255,0.03)";
+                    }
+                    e.currentTarget.style.transform = "scale(1.01)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = "transparent";
+                    }
+                    e.currentTarget.style.transform = "scale(1)";
                   }}
                 >
-                  <span style={{ color: theme.accent }}>{p.name}</span>
-                </button>
-
-                {/* DELETE ONLY USER ADDED */}
-                {addedPlaylists.some((x) => x.playlist === p.playlist) && (
+                  {/* SELECT */}
                   <button
-                    onClick={() => deletePlaylist(p)}
+                    onClick={() => {
+                      setSelectedPlaylist(p);
+                      setShowPlaylist(false);
+                    }}
                     style={{
-                      marginLeft: 10,
-                      padding: 6,
+                      flex: 1,
+                      textAlign: "left",
                       background: "transparent",
                       border: "none",
                       cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
                     }}
                   >
-                    <IoTrash size={18} color={theme.danger} />
-                  </button>
-                )}
-              </div>
-            ))}
+                    <span
+                      style={{
+                        color: isSelected ? "#fff" : "#cbd5e1",
+                        fontWeight: 700,
+                        fontSize: 14,
+                      }}
+                    >
+                      {p.name}
+                    </span>
 
-            {/* CLOSE BUTTON */}
+                    {isSelected && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          color: "rgba(255,255,255,0.85)",
+                        }}
+                      >
+                        Currently Active
+                      </span>
+                    )}
+                  </button>
+
+                  {/* DELETE */}
+                  {addedPlaylists.some((x) => x.playlist === p.playlist) && (
+                    <button
+                      onClick={() => deletePlaylist(p)}
+                      style={{
+                        marginLeft: 10,
+                        padding: 6,
+                        borderRadius: 8,
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <IoTrash
+                        size={18}
+                        color={isSelected ? "#fff" : theme.danger}
+                      />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* CLOSE */}
             <button
               onClick={() => setShowPlaylist(false)}
               style={{
                 width: "100%",
-                marginTop: 10,
+                marginTop: 12,
                 padding: 12,
-                borderRadius: 10,
+                borderRadius: 12,
+                background: "linear-gradient(135deg, #ff4d4d, #b30000)",
                 border: "none",
-                backgroundColor: theme.danger,
+                fontWeight: 700,
                 color: "#fff",
-                fontWeight: "bold",
-                cursor: "pointer",
               }}
             >
               CLOSE
@@ -746,10 +899,11 @@ export default function IPTVWebFull() {
           <div
             style={{
               width: "100%",
-              maxWidth: 400,
+              maxWidth: 420,
               backgroundColor: theme.card,
-              borderRadius: 16,
-              padding: 12,
+              borderRadius: 18,
+              padding: 14,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
             }}
           >
             {[
@@ -760,38 +914,80 @@ export default function IPTVWebFull() {
               "news",
               "kids",
               "documentary",
-            ].map((c) => (
-              <button
-                key={c}
-                onClick={() => {
-                  setActiveFilters({ category: c });
-                  setShowCategory(false);
-                }}
-                style={{
-                  width: "100%",
-                  padding: 12,
-                  textAlign: "left",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ color: theme.accent, fontSize: 15 }}>{c}</span>
-              </button>
-            ))}
+            ].map((c) => {
+              const isSelected = activeFilters.category === c;
 
+              return (
+                <button
+                  key={c}
+                  onClick={() => {
+                    setActiveFilters({ category: c });
+                    setShowCategory(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    marginBottom: 6,
+                    textAlign: "left",
+                    border: "1px solid transparent",
+                    cursor: "pointer",
+
+                    background: isSelected
+                      ? `linear-gradient(135deg, ${theme.accent}20, rgba(0,0,0,0.2))`
+                      : "transparent",
+
+                    borderColor: isSelected
+                      ? `${theme.accent}55`
+                      : theme.border,
+
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background =
+                        "rgba(255,255,255,0.03)";
+                    }
+                    e.currentTarget.style.transform = "scale(1.01)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = "transparent";
+                    }
+                    e.currentTarget.style.transform = "scale(1)";
+                  }}
+                >
+                  <span
+                    style={{
+                      color: isSelected ? "#fff" : "#cbd5e1",
+                      fontWeight: 700,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {c}
+                  </span>
+
+                  {isSelected && (
+                    <span style={{ color: "#fff", fontWeight: 700 }}>✓</span>
+                  )}
+                </button>
+              );
+            })}
+
+            {/* CLOSE */}
             <button
               onClick={() => setShowCategory(false)}
               style={{
                 width: "100%",
                 marginTop: 10,
-                padding: 10,
+                padding: 12,
                 borderRadius: 12,
-                backgroundColor: theme.danger,
+                background: "linear-gradient(135deg, #ff4d4d, #b30000)",
                 border: "none",
                 color: "#fff",
-                fontWeight: "bold",
-                cursor: "pointer",
+                fontWeight: 700,
               }}
             >
               CLOSE
