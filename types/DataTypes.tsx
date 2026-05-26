@@ -15,5 +15,4 @@ interface Playlist {
   playlist: string;
 }
 
-export { Channel, Playlist };
-
+export type { Channel, Playlist };
