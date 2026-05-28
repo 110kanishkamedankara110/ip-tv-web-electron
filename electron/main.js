@@ -97,7 +97,9 @@ async function createWindow() {
       nodeIntegration: false,
     },
   });
-  mainWindow.webContents.openDevTools();
+  if (!app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 
   mainWindow.setMenu(null);
   await startStaticServer();
@@ -126,8 +128,6 @@ ipcMain.handle("set-window-size", (_, w, h) => {
 ipcMain.handle("get-current-url", () => {
   return currentUrl;
 });
-
-
 
 app.whenReady().then(createWindow);
 
