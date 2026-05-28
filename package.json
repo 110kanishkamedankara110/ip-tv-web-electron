@@ -1,6 +1,6 @@
 {
   "name": "ip-tv-web",
-  "version": "0.1.0",
+  "version": "1.1.1",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@tanstack/react-virtual": "^3.13.26",
+    "axios": "^1.16.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
     "electron-serve": "^3.0.1",
