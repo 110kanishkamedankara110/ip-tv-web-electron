@@ -25,6 +25,7 @@ import {
 
 import { M3uParser } from "m3u-parser-generator";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import axios from "axios";
 
 // ================= THEME =================
 export const theme = {
@@ -43,7 +44,7 @@ const ADDED_KEY = "@added_playlists";
 
 export default function IPTVWebFull() {
   const parentRef = useRef<HTMLDivElement | null>(null);
-
+  const [loading, setLoading] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [search, setSearch] = useState("");
 
@@ -85,8 +86,11 @@ export default function IPTVWebFull() {
   }, []);
 
   // ================= FETCH =================
+
   const fetchChannels = async () => {
     try {
+      setLoading(true);
+
       let url = selectedPlaylist.playlist;
 
       if (isIPTVOrg && activeFilters.category !== "All") {
@@ -95,11 +99,15 @@ export default function IPTVWebFull() {
 
       if (cache.current[url]) {
         setChannels(cache.current[url]);
+        setLoading(false);
         return;
       }
 
-      const res = await fetch(url);
-      const text = await res.text();
+      const res = await axios.get(url, {
+        responseType: "text",
+      });
+
+      const text = res.data;
 
       const parser = new M3uParser();
       const data = parser.parse(text);
@@ -112,9 +120,13 @@ export default function IPTVWebFull() {
       }));
 
       cache.current[url] = parsed;
+
       setChannels(parsed);
-    } catch {
+    } catch (e) {
+      console.log(e);
       alert("Failed to load playlist");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -550,39 +562,86 @@ export default function IPTVWebFull() {
             position: "relative",
           }}
         >
-          <div
-            style={{
-              height: rowVirtualizer.getTotalSize(),
-              width: "100%",
-              position: "relative",
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((row) => {
-              const item = filtered[row.index];
+          {loading ? (
+            <div
+              style={{
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexDirection: "column",
+                gap: 14,
+              }}
+            >
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: "50%",
+                  border: `4px solid ${theme.border}`,
+                  borderTop: `4px solid ${theme.accent}`,
+                  animation: "spin 1s linear infinite",
+                }}
+              />
 
-              return (
-                <div
-                  key={row.key}
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    transform: `translateY(${row.start}px)`,
-                    overflowX: "hidden",
-                  }}
-                >
-                  <ChannelCard
-                    channel={item}
-                    isFavorite={favorites.includes(
-                      item.location || item.name || "",
-                    )}
-                    toggleFavorite={toggleFav}
-                    onSelect={selectChannel}
-                    isPlaying={current?.location === item.location}
-                  />
-                </div>
-              );
-            })}
-          </div>
+              <span
+                style={{
+                  color: theme.muted,
+                  fontSize: 13,
+                  letterSpacing: 0.5,
+                }}
+              >
+                Loading channels...
+              </span>
+
+              <style>
+                {`
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}
+              </style>
+            </div>
+          ) : (
+            <div
+              style={{
+                height: rowVirtualizer.getTotalSize(),
+                width: "100%",
+                position: "relative",
+              }}
+            >
+              {rowVirtualizer.getVirtualItems().map((row) => {
+                const item = filtered[row.index];
+
+                return (
+                  <div
+                    key={row.key}
+                    style={{
+                      position: "absolute",
+                      width: "100%",
+                      transform: `translateY(${row.start}px)`,
+                      overflowX: "hidden",
+                    }}
+                  >
+                    <ChannelCard
+                      channel={item}
+                      isFavorite={favorites.includes(
+                        item.location || item.name || "",
+                      )}
+                      toggleFavorite={toggleFav}
+                      onSelect={selectChannel}
+                      isPlaying={current?.location === item.location}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
