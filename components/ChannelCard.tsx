@@ -2,14 +2,14 @@
 
 import { Channel } from "@/types/DataTypes";
 import Image from "next/image";
-import { memo, useState } from "react";
+import React, { memo, useState } from "react";
 import { IoHeart } from "react-icons/io5";
 
 const ChannelCard: React.FC<{
   channel: Channel;
   isFavorite: boolean;
   toggleFavorite: (channel: Channel) => void;
-  onSelect: (channel: Channel) => void;
+  onSelect: (channel: Channel | null) => void;
   isPlaying?: boolean;
 }> = memo(({ channel, isFavorite, toggleFavorite, onSelect, isPlaying }) => {
   const [isFocused, setIsFocused] = useState(false);
@@ -78,7 +78,12 @@ const ChannelCard: React.FC<{
         <div
           role="button"
           tabIndex={0}
-          onClick={() => onSelect(channel)}
+          onClick={() => {
+            onSelect(null);
+            setTimeout(() => {
+              onSelect(channel);
+            }, 10);
+          }}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           style={{
@@ -115,6 +120,8 @@ const ChannelCard: React.FC<{
                 style={{
                   objectFit: "contain",
                   transition: "all 0.2s ease",
+                  width: "auto",
+                  height: "auto",
                 }}
               />
             ) : (
@@ -225,4 +232,4 @@ const ChannelCard: React.FC<{
 
 ChannelCard.displayName = "ChannelCard";
 
-export default ChannelCard;
+export default React.memo(ChannelCard);

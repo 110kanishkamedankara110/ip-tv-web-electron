@@ -20,14 +20,14 @@ import {
   IoGlobeOutline,
   IoHeart,
   IoListOutline,
+  IoPencil,
   IoTrash,
 } from "react-icons/io5";
 
-import { M3uParser } from "m3u-parser-generator";
+import { M3uMedia, M3uParser } from "m3u-parser-generator";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
 
-// ================= THEME =================
 export const theme = {
   bg: "#05070F",
   card: "#0B1020",
@@ -45,9 +45,10 @@ const ADDED_KEY = "@added_playlists";
 export default function IPTVWebFull() {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingButton, setLoadingButton] = useState(false);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [search, setSearch] = useState("");
-
+  const [editIndex, setEditIndex] = useState<null | number>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showFavOnly, setShowFavOnly] = useState(false);
 
@@ -61,83 +62,116 @@ export default function IPTVWebFull() {
   const [showPlaylist, setShowPlaylist] = useState(false);
   const [showCategory, setShowCategory] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [playlistName, setPlaylistName] = useState("");
   const [playlistUrl, setPlaylistUrl] = useState("");
 
   const [addedPlaylists, setAddedPlaylists] = useState<Playlist[]>([]);
 
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist>({
-    name: "IPTV Org",
-    playlist: "https://iptv-org.github.io/iptv/index.m3u",
-  });
+  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist>();
+  const cache = useRef(new Map<string, Channel[]>());
+  const isIPTVOrg = selectedPlaylist?.name === "IPTV Org";
 
-  const cache = useRef<Record<string, Channel[]>>({});
+  const showToast = (message: string, type: Toast["type"] = "info") => {
+    const id = Date.now();
 
-  const isIPTVOrg = selectedPlaylist.name === "IPTV Org";
+    setToasts((prev) => [...prev, { id, message, type }]);
 
-  // ================= LOAD STORAGE =================
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 8000);
+  };
+
+  const { url, cacheKey } = useMemo(() => {
+    let u = selectedPlaylist?.playlist ?? "";
+
+    if (isIPTVOrg && activeFilters.category !== "All") {
+      u = `https://iptv-org.github.io/iptv/categories/${activeFilters.category}.m3u`;
+    }
+
+    return {
+      url: u,
+      cacheKey: isIPTVOrg ? `${u}:${activeFilters.category}` : u,
+    };
+  }, [selectedPlaylist?.playlist, activeFilters.category, isIPTVOrg]);
+  const parserRef = useRef(new M3uParser());
+
   useEffect(() => {
     const fav = localStorage.getItem(FAVORITES_KEY);
     const added = localStorage.getItem(ADDED_KEY);
-
+    setSelectedPlaylist(
+      localStorage.getItem("SELECTED_PLAYLIST")
+        ? JSON.parse(localStorage.getItem("SELECTED_PLAYLIST") as string)
+        : {
+            name: "IPTV Org",
+            playlist: "https://iptv-org.github.io/iptv/index.m3u",
+          },
+    );
     if (fav) setFavorites(JSON.parse(fav));
     if (added) setAddedPlaylists(JSON.parse(added));
   }, []);
 
-  // ================= FETCH =================
+  useEffect(() => {
+    return () => {
+      window?.electronAPI?.stopVLC();
+    };
+  }, []);
 
   const fetchChannels = async () => {
     try {
+      if (!selectedPlaylist) return;
+
       setLoading(true);
 
-      let url = selectedPlaylist.playlist;
+      const cached = cache.current.get(cacheKey);
 
-      if (isIPTVOrg && activeFilters.category !== "All") {
-        url = `https://iptv-org.github.io/iptv/categories/${activeFilters.category}.m3u`;
-      }
-
-      if (cache.current[url]) {
-        setChannels(cache.current[url]);
+      if (cached) {
+        setChannels(cached);
         setLoading(false);
         return;
       }
 
-      const res = await axios.get(url, {
-        responseType: "text",
-      });
+      const text = window?.electronAPI
+        ? await window.electronAPI.fetchM3U(url)
+        : (
+            await axios.get(url, {
+              responseType: "text",
+              timeout: 15000,
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+              },
+            })
+          ).data;
 
-      const text = res.data;
+      const data = parserRef.current.parse(text);
 
-      const parser = new M3uParser();
-      const data = parser.parse(text);
-
-      const parsed: Channel[] = data.medias.map((m: any, i: number) => ({
-        id: `${m.location}-${i}`,
-        name: m.name,
-        location: m.location,
-        attributes: m.attributes,
+      const parsed: Channel[] = data.medias.map((m: M3uMedia, i: number) => ({
+        id: `${m.location ?? m.name ?? "channel"}-${i}`,
+        name: m.name ?? "Unknown",
+        location: m.location ?? "",
+        attributes: {
+          "tvg-id": m.attributes?.["tvg-id"] ?? "",
+          "tvg-logo": m.attributes?.["tvg-logo"] ?? "",
+          "group-title": m.attributes?.["group-title"] ?? "",
+        },
       }));
-
-      cache.current[url] = parsed;
-
+      cache.current.set(cacheKey, parsed);
       setChannels(parsed);
     } catch (e) {
       console.log(e);
-      alert("Failed to load playlist");
+      showToast("Failed to load playlist", "error");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const t = setTimeout(fetchChannels, 300);
-    return () => clearTimeout(t);
+    fetchChannels();
+    localStorage.setItem("SELECTED_PLAYLIST", JSON.stringify(selectedPlaylist));
   }, [selectedPlaylist, activeFilters.category]);
 
-  // ================= FILTER =================
   const filtered = useMemo(() => {
-    let list = [...channels];
+    let list = channels;
 
     if (search) {
       const s = search.toLowerCase();
@@ -158,75 +192,174 @@ export default function IPTVWebFull() {
   useEffect(() => {
     if (playerMode === "vlc") {
       window?.electronAPI?.setWindowSize(420, 800);
-      if (current) {
-        window?.electronAPI?.playInVLC(current?.location ?? "");
+
+      if (current?.location) {
+        window?.electronAPI?.playInVLC(current.location);
       }
     } else {
       window?.electronAPI?.setWindowSize(1200, 800);
-      window?.electronAPI?.stopVLC();
     }
   }, [playerMode, current]);
 
-  // ================= VIRTUALIZER (FIXED) =================
+  useEffect(() => {
+    return () => {
+      window?.electronAPI?.stopVLC();
+    };
+  }, []);
+
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 100,
-    overscan: 10,
+    overscan: 8,
   });
 
-  // ================= FAVORITES =================
-  const toggleFav = useCallback(
-    (ch: Channel) => {
-      const id = ch.location || ch.name || "";
-      let f = [...favorites];
+  function toggleFav(ch: Channel) {
+    const id = ch.location || ch.name || "";
 
-      if (f.includes(id)) f = f.filter((x) => x !== id);
-      else f.push(id);
+    setFavorites((prev) => {
+      let updated = [...prev];
 
-      setFavorites(f);
-      localStorage.setItem(FAVORITES_KEY, JSON.stringify(f));
-    },
-    [favorites],
-  );
+      if (updated.includes(id)) {
+        updated = updated.filter((x) => x !== id);
+      } else {
+        updated.push(id);
+      }
 
-  const selectChannel = useCallback((ch: Channel) => {
-    setCurrent(ch);
-  }, []);
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }
 
-  // ================= PLAYLIST =================
+  const validatePlaylist = async (url: string) => {
+    try {
+      await axios.get(url, {
+        responseType: "text",
+        timeout: 8000,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const addPlaylist = async () => {
-    if (!playlistName || !playlistUrl) return;
-
-    const newP: Playlist = {
+    const newItem = {
       name: playlistName,
       playlist: playlistUrl,
     };
 
-    const updated = [...addedPlaylists, newP];
-    setAddedPlaylists(updated);
-    localStorage.setItem(ADDED_KEY, JSON.stringify(updated));
+    try {
+      setLoadingButton(true);
 
-    setPlaylistName("");
-    setPlaylistUrl("");
-    setShowAdd(false);
+      const isValid = await validatePlaylist(playlistUrl);
+
+      if (!isValid) {
+        showToast("Playlist is not responding", "error");
+        setLoading(false);
+        setPlaylistName("");
+        setPlaylistUrl("");
+      } else {
+        if (editIndex !== null) {
+          const updated = [...addedPlaylists];
+          updated[editIndex] = newItem;
+          setAddedPlaylists(updated);
+          setEditIndex(null);
+          showToast("Playlist updated", "success");
+        } else {
+          setAddedPlaylists((prev) => [...prev, newItem]);
+          showToast("Playlist added", "success");
+        }
+
+        setPlaylistName("");
+        setPlaylistUrl("");
+        setShowAdd(false);
+      }
+    } catch (e) {
+      console.log(e);
+      showToast(`Playlist validation failed ${e}`, "error");
+    } finally {
+      setLoadingButton(false);
+    }
   };
 
-  const deletePlaylist = (target: Playlist) => {
-    const updated = addedPlaylists.filter(
-      (p) => p.playlist !== target.playlist,
-    );
+  useEffect(() => {
+    localStorage.setItem(ADDED_KEY, JSON.stringify(addedPlaylists));
+  }, [addedPlaylists]);
 
-    setAddedPlaylists(updated);
-    localStorage.setItem(ADDED_KEY, JSON.stringify(updated));
+  const deletePlaylist = (target: Playlist) => {
+    try {
+      const updated = addedPlaylists.filter(
+        (p) => p.playlist !== target.playlist,
+      );
+      setAddedPlaylists(updated);
+      showToast("Playlist removed", "success");
+    } catch (e) {
+      showToast("Failed to remove playlist", "error");
+      console.log(e);
+    }
   };
   const PREDEFINED: Playlist[] = [
     { name: "IPTV Org", playlist: "https://iptv-org.github.io/iptv/index.m3u" },
   ];
-  // ================= UI =================
+
+  const selectChannel = useCallback((ch: Channel | null) => {
+    setCurrent(ch);
+  }, []);
+
   return (
     <div style={{ display: "flex", height: "100vh", background: theme.bg }}>
-      {/* ================= LEFT PLAYER ================= */}
+      <div
+        style={{
+          position: "fixed",
+          top: 20,
+          right: 20,
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+          zIndex: 99999,
+        }}
+      >
+        {toasts.map((t) => (
+          <>
+            <style key={t.message}>
+              {`
+    @keyframes slideIn {
+      from {
+        transform: translateX(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+  `}
+            </style>
+            <div
+              key={t.message}
+              style={{
+                padding: "10px 14px",
+                borderRadius: 10,
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 600,
+                background:
+                  t.type === "error"
+                    ? "#FF3B6B"
+                    : t.type === "success"
+                      ? "#00F5D4"
+                      : "#1F2A44",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.4)",
+                animation: "slideIn 0.2s ease",
+              }}
+            >
+              {t.message}
+            </div>
+          </>
+        ))}
+      </div>
+
       {playerMode !== "vlc" && (
         <div
           style={{
@@ -245,7 +378,6 @@ export default function IPTVWebFull() {
         </div>
       )}
 
-      {/* ================= RIGHT PANEL ================= */}
       <div
         style={{
           flex: 1.2,
@@ -255,7 +387,6 @@ export default function IPTVWebFull() {
           padding: 10,
         }}
       >
-        {/* TOP BAR */}
         <button
           onClick={() => setPlayerMode(playerMode === "web" ? "vlc" : "web")}
           style={{
@@ -297,7 +428,6 @@ export default function IPTVWebFull() {
               playerMode === "web" ? theme.accent : theme.border;
           }}
         >
-          {/* ICON */}
           <div
             style={{
               display: "flex",
@@ -314,7 +444,6 @@ export default function IPTVWebFull() {
             )}
           </div>
 
-          {/* LABEL */}
           <span
             style={{
               fontSize: 12,
@@ -326,7 +455,6 @@ export default function IPTVWebFull() {
             {playerMode === "web" ? "WEB PLAYER" : "VLC MODE"}
           </span>
 
-          {/* GLOW DOT */}
           <div
             style={{
               width: 6,
@@ -340,7 +468,6 @@ export default function IPTVWebFull() {
             }}
           />
         </button>
-        {/* SEARCH */}
         <div style={{ padding: 10 }}>
           <div
             style={{
@@ -379,7 +506,6 @@ export default function IPTVWebFull() {
               }}
             />
 
-            {/* SEARCH ICON */}
             <div
               style={{
                 position: "absolute",
@@ -394,7 +520,6 @@ export default function IPTVWebFull() {
               🔍
             </div>
 
-            {/* GLOW LINE */}
             <div
               style={{
                 position: "absolute",
@@ -425,7 +550,6 @@ export default function IPTVWebFull() {
             backdropFilter: "blur(10px)",
           }}
         >
-          {/* BUTTON STYLE BASE */}
           {[
             {
               icon: <IoListOutline size={18} />,
@@ -452,8 +576,8 @@ export default function IPTVWebFull() {
             {
               icon: <IoHeart size={18} />,
               onClick: () => setShowFavOnly(!showFavOnly),
-              color: theme.danger,
-              glow: "#FF3B6B",
+              color: !showFavOnly ? "#ffff" : "#FF6B6B",
+              glow: "#FF6B6B",
             },
           ].map((b, i) => (
             <button
@@ -553,13 +677,13 @@ export default function IPTVWebFull() {
             </button>
           </div>
         )}
-        {/* VIRTUAL LIST */}
         <div
           ref={parentRef}
           style={{
             flex: 1,
             overflow: "auto",
             position: "relative",
+            overflowX: "hidden",
           }}
         >
           {loading ? (
@@ -571,6 +695,7 @@ export default function IPTVWebFull() {
                 justifyContent: "center",
                 flexDirection: "column",
                 gap: 14,
+                zIndex: 99999999,
               }}
             >
               <div
@@ -620,13 +745,15 @@ export default function IPTVWebFull() {
 
                 return (
                   <div
+                    ref={rowVirtualizer.measureElement}
                     key={row.key}
                     style={{
                       position: "absolute",
                       width: "100%",
                       transform: `translateY(${row.start}px)`,
-                      overflowX: "hidden",
+                      willChange: "transform",
                     }}
+                    data-index={row.index}
                   >
                     <ChannelCard
                       channel={item}
@@ -644,8 +771,6 @@ export default function IPTVWebFull() {
           )}
         </div>
       </div>
-
-      {/* ================= MODALS (UNCHANGED LOGIC) ================= */}
 
       {showAdd && (
         <div
@@ -673,7 +798,42 @@ export default function IPTVWebFull() {
               gap: 12,
             }}
           >
-            {/* INPUT NAME */}
+            {loadingButton && (
+              <div
+                style={{
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "column",
+                  gap: 14,
+                  zIndex: 99999999,
+                }}
+              >
+                <div
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: "50%",
+                    border: `4px solid ${theme.border}`,
+                    borderTop: `4px solid ${theme.accent}`,
+                    animation: "spin 1s linear infinite",
+                  }}
+                />
+                <style>
+                  {`
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}
+                </style>
+              </div>
+            )}
             <input
               value={playlistName}
               onChange={(e) => setPlaylistName(e.target.value)}
@@ -697,7 +857,6 @@ export default function IPTVWebFull() {
               }}
             />
 
-            {/* INPUT URL */}
             <input
               value={playlistUrl}
               onChange={(e) => setPlaylistUrl(e.target.value)}
@@ -721,7 +880,6 @@ export default function IPTVWebFull() {
               }}
             />
 
-            {/* ADD BUTTON */}
             <button
               onClick={addPlaylist}
               disabled={!playlistName || !playlistUrl}
@@ -770,12 +928,18 @@ export default function IPTVWebFull() {
                     : "0 10px 25px rgba(0,0,0,0.35)";
               }}
             >
-              ADD PLAYLIST
+              <span style={{ fontWeight: 700 }}>
+                {editIndex !== null ? "EDIT PLAYLIST" : "ADD PLAYLIST"}
+              </span>
             </button>
 
-            {/* CLOSE */}
             <button
-              onClick={() => setShowAdd(false)}
+              onClick={() => {
+                setShowAdd(false);
+                setEditIndex(null);
+                setPlaylistName("");
+                setPlaylistUrl("");
+              }}
               style={{
                 width: "100%",
                 padding: 12,
@@ -802,7 +966,7 @@ export default function IPTVWebFull() {
             justifyContent: "center",
             alignItems: "center",
             padding: 20,
-            zIndex: 9999,
+            zIndex: 999,
           }}
         >
           <div
@@ -817,6 +981,63 @@ export default function IPTVWebFull() {
               boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                gap: 12,
+                padding: 12,
+                alignItems: "center",
+                background:
+                  "linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))",
+                border: "1px solid #1F2A44",
+                borderRadius: 16,
+                margin: "10px 0",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              {[
+                {
+                  icon: <IoAdd size={18} />,
+                  onClick: () => setShowAdd(true),
+                  color: theme.span,
+                  glow: "#7CFF6B",
+                },
+              ].map((b, i) => (
+                <button
+                  key={i}
+                  onClick={b.onClick}
+                  style={{
+                    width: 42,
+                    height: 42,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: 14,
+                    background:
+                      "linear-gradient(145deg, rgba(17,28,51,0.9), rgba(11,18,32,0.9))",
+                    border: "1px solid #1F2A44",
+                    cursor: "pointer",
+                    color: b.color,
+                    transition: "all 0.2s ease",
+                    boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
+                  }}
+                  onMouseEnter={(e) => {
+                    const el = e.currentTarget;
+                    el.style.transform = "scale(1.12)";
+                    el.style.boxShadow = `0 0 18px ${b.glow}33, 0 10px 25px rgba(0,0,0,0.5)`;
+                    el.style.borderColor = b.glow;
+                  }}
+                  onMouseLeave={(e) => {
+                    const el = e.currentTarget;
+                    el.style.transform = "scale(1)";
+                    el.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
+                    el.style.borderColor = "#1F2A44";
+                  }}
+                >
+                  {b.icon}
+                </button>
+              ))}
+            </div>
             {[...PREDEFINED, ...addedPlaylists].map((p) => {
               const isSelected = selectedPlaylist?.playlist === p.playlist;
 
@@ -860,7 +1081,6 @@ export default function IPTVWebFull() {
                     e.currentTarget.style.transform = "scale(1)";
                   }}
                 >
-                  {/* SELECT */}
                   <button
                     onClick={() => {
                       setSelectedPlaylist(p);
@@ -899,30 +1119,53 @@ export default function IPTVWebFull() {
                     )}
                   </button>
 
-                  {/* DELETE */}
                   {addedPlaylists.some((x) => x.playlist === p.playlist) && (
-                    <button
-                      onClick={() => deletePlaylist(p)}
-                      style={{
-                        marginLeft: 10,
-                        padding: 6,
-                        borderRadius: 8,
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                      }}
-                    >
-                      <IoTrash
-                        size={18}
-                        color={isSelected ? "#fff" : theme.danger}
-                      />
-                    </button>
+                    <>
+                      {" "}
+                      <button
+                        onClick={() => {
+                          const index = addedPlaylists.findIndex(
+                            (x) => x.playlist === p.playlist,
+                          );
+
+                          setEditIndex(index);
+                          setPlaylistName(p.name);
+                          setPlaylistUrl(p.playlist);
+                          setShowAdd(true);
+                        }}
+                        style={{
+                          marginRight: 6,
+                          padding: 6,
+                          borderRadius: 8,
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <IoPencil size={20} />
+                      </button>
+                      <button
+                        onClick={() => deletePlaylist(p)}
+                        style={{
+                          marginLeft: 10,
+                          padding: 6,
+                          borderRadius: 8,
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                        }}
+                      >
+                        <IoTrash
+                          size={18}
+                          color={isSelected ? "#fff" : theme.danger}
+                        />
+                      </button>
+                    </>
                   )}
                 </div>
               );
             })}
 
-            {/* CLOSE */}
             <button
               onClick={() => setShowPlaylist(false)}
               style={{
@@ -1035,7 +1278,6 @@ export default function IPTVWebFull() {
               );
             })}
 
-            {/* CLOSE */}
             <button
               onClick={() => setShowCategory(false)}
               style={{

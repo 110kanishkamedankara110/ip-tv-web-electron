@@ -3,13 +3,13 @@ const path = require("path");
 const { spawn } = require("child_process");
 const express = require("express");
 const kill = require("tree-kill"); // ✅ IMPORTANT
+const { default: axios } = require("axios");
 
 let mainWindow;
 let vlcProcess = null;
 let currentUrl = null;
 let staticServer = null;
 
-// ================= VLC PATH =================
 function getVlcPath() {
   return app.isPackaged
     ? path.join(process.resourcesPath, "VLC", "vlc.exe")
@@ -41,7 +41,6 @@ async function killVLC() {
 
   await forceKillVLC();
 }
-// ================= PLAY VLC (SINGLE INSTANCE SAFE) =================
 async function playVLC(url) {
   await killVLC();
 
@@ -68,12 +67,10 @@ async function playVLC(url) {
     vlcProcess = null;
   });
 }
-// ================= STOP VLC =================
 async function stopVLC() {
   await killVLC();
 }
 
-// ================= STATIC SERVER =================
 function startStaticServer() {
   const appServer = express();
 
@@ -89,7 +86,6 @@ function startStaticServer() {
   });
 }
 
-// ================= WINDOW =================
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -101,14 +97,20 @@ async function createWindow() {
       nodeIntegration: false,
     },
   });
+  mainWindow.webContents.openDevTools();
+
   mainWindow.setMenu(null);
   await startStaticServer();
   mainWindow.loadURL("http://localhost:3000");
 }
 
-// ================= IPC =================
 ipcMain.handle("play-vlc", async (_, url) => {
   await playVLC(url);
+});
+
+ipcMain.handle("fetch-m3u", async (_, url) => {
+  const res = await axios.get(url);
+  return res.data;
 });
 
 ipcMain.handle("stop-vlc", async () => {
@@ -125,7 +127,8 @@ ipcMain.handle("get-current-url", () => {
   return currentUrl;
 });
 
-// ================= APP LIFECYCLE =================
+
+
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", async () => {
