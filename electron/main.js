@@ -115,6 +115,18 @@ ipcMain.handle("fetch-m3u", async (_, url) => {
   return res.data;
 });
 
+ipcMain.handle("validate-m3u", async (_, url) => {
+  try {
+    await axios.get(url, {
+      timeout: 8000,
+      responseType: "text",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle("stop-vlc", async () => {
   await stopVLC();
 });
