@@ -232,6 +232,10 @@ export default function IPTVWebFull() {
   }
 
   const validatePlaylist = async (url: string) => {
+    if (window.electronAPI) {
+      return await window.electronAPI.validateM3U(url);
+    }
+
     try {
       await axios.get(url, {
         responseType: "text",
@@ -322,7 +326,7 @@ export default function IPTVWebFull() {
       >
         {toasts.map((t) => (
           <>
-            <style key={t.message}>
+            <style>
               {`
     @keyframes slideIn {
       from {
@@ -337,7 +341,6 @@ export default function IPTVWebFull() {
   `}
             </style>
             <div
-              key={t.message}
               style={{
                 padding: "10px 14px",
                 borderRadius: 10,

@@ -7,6 +7,7 @@ declare global {
       playInVLC: (url: string) => void;
       stopVLC: () => void;
       fetchM3U: (url: string) => Promise<string>;
+      validateM3U: (url: string) => Promise<boolean>;
     };
   }
   type Toast = {
