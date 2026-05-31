@@ -5,4 +5,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   fetchM3U: (url) => ipcRenderer.invoke("fetch-m3u", url),
   playInVLC: (url) => ipcRenderer.invoke("play-vlc", url),
   stopVLC: () => ipcRenderer.invoke("stop-vlc"),
+  validateM3U: (url) => ipcRenderer.invoke("validate-m3u", url),
 });
