@@ -27,6 +27,8 @@ import {
 import { M3uMedia, M3uParser } from "m3u-parser-generator";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import axios from "axios";
+import { BsPip } from "react-icons/bs";
+import { VscScreenFull } from "react-icons/vsc";
 
 export const theme = {
   bg: "#05070F",
@@ -51,12 +53,13 @@ export default function IPTVWebFull() {
   const [editIndex, setEditIndex] = useState<null | number>(null);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showFavOnly, setShowFavOnly] = useState(false);
-
+  const [isPip, setPip] = useState<boolean>(false);
+  const [showPlayer, setShowPlayer] = useState(true);
   const [activeFilters, setActiveFilters] = useState<{ category?: string }>({
     category: "All",
   });
 
-  const [playerMode, setPlayerMode] = useState<"web" | "vlc">("web");
+  const [playerMode, setPlayerMode] = useState<"web" | "mpv">("web");
   const [current, setCurrent] = useState<Channel | null>(null);
 
   const [showPlaylist, setShowPlaylist] = useState(false);
@@ -96,6 +99,40 @@ export default function IPTVWebFull() {
   }, [selectedPlaylist?.playlist, activeFilters.category, isIPTVOrg]);
   const parserRef = useRef(new M3uParser());
 
+  const categories = [
+    "All",
+    "animation",
+    "auto",
+    "business",
+    "classic",
+    "comedy",
+    "cooking",
+    "culture",
+    "documentary",
+    "education",
+    "entertainment",
+    "family",
+    "general",
+    "interactive",
+    "kids",
+    "legislative",
+    "lifestyle",
+    "movies",
+    "music",
+    "news",
+    "outdoor",
+    "public",
+    "relax",
+    "religious",
+    "science",
+    "series",
+    "shop",
+    "sports",
+    "travel",
+    "weather",
+    "undefined",
+  ];
+
   useEffect(() => {
     const fav = localStorage.getItem(FAVORITES_KEY);
     const added = localStorage.getItem(ADDED_KEY);
@@ -113,7 +150,7 @@ export default function IPTVWebFull() {
 
   useEffect(() => {
     return () => {
-      window?.electronAPI?.stopVLC();
+      window?.electronAPI?.stopMpv();
     };
   }, []);
 
@@ -190,20 +227,42 @@ export default function IPTVWebFull() {
   }, [channels, search, showFavOnly, favorites]);
 
   useEffect(() => {
-    if (playerMode === "vlc") {
-      window?.electronAPI?.setWindowSize(420, 800);
+    if (!window.electronAPI) return;
 
-      if (current?.location) {
-        window?.electronAPI?.playInVLC(current.location);
+    const url = current?.location || "";
+
+    if (!url) return;
+    const isMpv = playerMode === "mpv";
+
+    if (!isMpv) {
+      window.electronAPI.setWindowSize(isPip ? 420 : 1200, 800);
+      window.electronAPI.stopMpv();
+      window.electronAPI.exitPiPMode();
+      if (isPip) {
+        window.electronAPI.openPiP(url);
+      } else {
+        window.electronAPI.closePiP();
       }
+      setShowPlayer(isPip ? false : true);
     } else {
-      window?.electronAPI?.setWindowSize(1200, 800);
+      window.electronAPI.setWindowSize(420, 800);
+      window.electronAPI.closePiP();
+
+      if (isPip) {
+        window.electronAPI.enterPiPMode(url);
+      } else {
+        window.electronAPI.exitPiPMode();
+        if (url) {
+          window.electronAPI.playMpv(url);
+        }
+      }
+      setShowPlayer(false);
     }
-  }, [playerMode, current]);
+  }, [playerMode, current, isPip]);
 
   useEffect(() => {
     return () => {
-      window?.electronAPI?.stopVLC();
+      window?.electronAPI?.stopMpv();
     };
   }, []);
 
@@ -305,6 +364,34 @@ export default function IPTVWebFull() {
   };
   const PREDEFINED: Playlist[] = [
     { name: "IPTV Org", playlist: "https://iptv-org.github.io/iptv/index.m3u" },
+    {
+      name: "Samsung TV Plus",
+      playlist: "https://apsattv.com/ssungusa.m3u",
+    },
+    {
+      name: "TheTVApp",
+      playlist: "https://tvpass.org/playlist/m3u",
+    },
+    {
+      name: "XUMO",
+      playlist: "https://www.apsattv.com/xumo.m3u",
+    },
+    {
+      name: "Local Now",
+      playlist: "https://www.apsattv.com/localnow.m3u",
+    },
+    {
+      name: "LG Channels",
+      playlist: "https://www.apsattv.com/lg.m3u",
+    },
+    {
+      name: "DistroTV",
+      playlist: "https://www.apsattv.com/distro.m3u",
+    },
+    {
+      name: "Xiaomi",
+      playlist: "https://www.apsattv.com/xiaomi.m3u",
+    },
   ];
 
   const selectChannel = useCallback((ch: Channel | null) => {
@@ -363,7 +450,7 @@ export default function IPTVWebFull() {
         ))}
       </div>
 
-      {playerMode !== "vlc" && (
+      {showPlayer && (
         <div
           style={{
             flex: 3,
@@ -391,7 +478,7 @@ export default function IPTVWebFull() {
         }}
       >
         <button
-          onClick={() => setPlayerMode(playerMode === "web" ? "vlc" : "web")}
+          onClick={() => setPlayerMode(playerMode === "web" ? "mpv" : "web")}
           style={{
             width: "100%",
             padding: "10px 12px",
@@ -455,7 +542,7 @@ export default function IPTVWebFull() {
               color: playerMode === "web" ? theme.accent : theme.span,
             }}
           >
-            {playerMode === "web" ? "WEB PLAYER" : "VLC MODE"}
+            {playerMode === "web" ? "WEB PLAYER" : "MPV MODE"}
           </span>
 
           <div
@@ -471,6 +558,7 @@ export default function IPTVWebFull() {
             }}
           />
         </button>
+
         <div style={{ padding: 10 }}>
           <div
             style={{
@@ -581,6 +669,15 @@ export default function IPTVWebFull() {
               onClick: () => setShowFavOnly(!showFavOnly),
               color: !showFavOnly ? "#ffff" : "#FF6B6B",
               glow: "#FF6B6B",
+            },
+            {
+              icon: (
+                <>
+                  {!isPip ? <BsPip size={20} /> : <VscScreenFull size={18} />}
+                </>
+              ),
+              onClick: () => setPip(!isPip),
+              glow: "#7CFF6B",
             },
           ].map((b, i) => (
             <button
@@ -764,7 +861,9 @@ export default function IPTVWebFull() {
                         item.location || item.name || "",
                       )}
                       toggleFavorite={toggleFav}
-                      onSelect={selectChannel}
+                      onSelect={(channel) => {
+                        selectChannel(channel);
+                      }}
                       isPlaying={current?.location === item.location}
                     />
                   </div>
@@ -979,195 +1078,149 @@ export default function IPTVWebFull() {
               maxHeight: "80vh",
               backgroundColor: theme.card,
               borderRadius: 18,
-              overflowY: "auto",
               padding: 12,
               boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
+            {/* SCROLLABLE AREA START */}
             <div
               style={{
-                display: "flex",
-                gap: 12,
-                padding: 12,
-                alignItems: "center",
-                background:
-                  "linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01))",
-                border: "1px solid #1F2A44",
-                borderRadius: 16,
-                margin: "10px 0",
-                backdropFilter: "blur(10px)",
+                flex: 1,
+                overflowY: "auto",
+                minHeight: 0,
+                padding: 10,
               }}
             >
-              {[
-                {
-                  icon: <IoAdd size={18} />,
-                  onClick: () => setShowAdd(true),
-                  color: theme.span,
-                  glow: "#7CFF6B",
-                },
-              ].map((b, i) => (
-                <button
-                  key={i}
-                  onClick={b.onClick}
-                  style={{
-                    width: 42,
-                    height: 42,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 14,
-                    background:
-                      "linear-gradient(145deg, rgba(17,28,51,0.9), rgba(11,18,32,0.9))",
-                    border: "1px solid #1F2A44",
-                    cursor: "pointer",
-                    color: b.color,
-                    transition: "all 0.2s ease",
-                    boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
-                  }}
-                  onMouseEnter={(e) => {
-                    const el = e.currentTarget;
-                    el.style.transform = "scale(1.12)";
-                    el.style.boxShadow = `0 0 18px ${b.glow}33, 0 10px 25px rgba(0,0,0,0.5)`;
-                    el.style.borderColor = b.glow;
-                  }}
-                  onMouseLeave={(e) => {
-                    const el = e.currentTarget;
-                    el.style.transform = "scale(1)";
-                    el.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
-                    el.style.borderColor = "#1F2A44";
-                  }}
-                >
-                  {b.icon}
-                </button>
-              ))}
-            </div>
-            {[...PREDEFINED, ...addedPlaylists].map((p) => {
-              const isSelected = selectedPlaylist?.playlist === p.playlist;
+              {[...PREDEFINED, ...addedPlaylists].map((p) => {
+                const isSelected = selectedPlaylist?.playlist === p.playlist;
 
-              return (
-                <div
-                  key={p.playlist}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    marginBottom: 6,
-                    cursor: "pointer",
-
-                    background: isSelected
-                      ? `linear-gradient(135deg, ${theme.accent}20, rgba(255,255,255,0.03))`
-                      : "transparent",
-
-                    border: isSelected
-                      ? `1px solid ${theme.accent}55`
-                      : `1px solid ${theme.border}`,
-
-                    boxShadow: isSelected
-                      ? "0 10px 25px rgba(0,0,0,0.35)"
-                      : "none",
-
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.03)";
-                    }
-                    e.currentTarget.style.transform = "scale(1.01)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = "transparent";
-                    }
-                    e.currentTarget.style.transform = "scale(1)";
-                  }}
-                >
-                  <button
-                    onClick={() => {
-                      setSelectedPlaylist(p);
-                      setShowPlaylist(false);
-                    }}
+                return (
+                  <div
+                    key={p.playlist}
                     style={{
-                      flex: 1,
-                      textAlign: "left",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
                       display: "flex",
-                      flexDirection: "column",
-                      gap: 2,
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      marginBottom: 6,
+                      cursor: "pointer",
+
+                      background: isSelected
+                        ? `linear-gradient(135deg, ${theme.accent}20, rgba(255,255,255,0.03))`
+                        : "transparent",
+
+                      border: isSelected
+                        ? `1px solid ${theme.accent}55`
+                        : `1px solid ${theme.border}`,
+
+                      boxShadow: isSelected
+                        ? "0 10px 25px rgba(0,0,0,0.35)"
+                        : "none",
+
+                      transition: "all 0.2s ease",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background =
+                          "rgba(255,255,255,0.03)";
+                      }
+                      e.currentTarget.style.transform = "scale(1.01)";
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = "transparent";
+                      }
+                      e.currentTarget.style.transform = "scale(1)";
                     }}
                   >
-                    <span
+                    <button
+                      onClick={() => {
+                        setSelectedPlaylist(p);
+                        setShowPlaylist(false);
+                      }}
                       style={{
-                        color: isSelected ? "#fff" : "#cbd5e1",
-                        fontWeight: 700,
-                        fontSize: 14,
+                        flex: 1,
+                        textAlign: "left",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
                       }}
                     >
-                      {p.name}
-                    </span>
-
-                    {isSelected && (
                       <span
                         style={{
-                          fontSize: 11,
-                          color: "rgba(255,255,255,0.85)",
+                          color: isSelected ? "#fff" : "#cbd5e1",
+                          fontWeight: 700,
+                          fontSize: 14,
                         }}
                       >
-                        Currently Active
+                        {p.name}
                       </span>
+
+                      {isSelected && (
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "rgba(255,255,255,0.85)",
+                          }}
+                        >
+                          Currently Active
+                        </span>
+                      )}
+                    </button>
+
+                    {addedPlaylists.some((x) => x.playlist === p.playlist) && (
+                      <>
+                        <button
+                          onClick={() => {
+                            const index = addedPlaylists.findIndex(
+                              (x) => x.playlist === p.playlist,
+                            );
+
+                            setEditIndex(index);
+                            setPlaylistName(p.name);
+                            setPlaylistUrl(p.playlist);
+                            setShowAdd(true);
+                          }}
+                          style={{
+                            marginRight: 6,
+                            padding: 6,
+                            borderRadius: 8,
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <IoPencil size={20} />
+                        </button>
+                        <button
+                          onClick={() => deletePlaylist(p)}
+                          style={{
+                            marginLeft: 10,
+                            padding: 6,
+                            borderRadius: 8,
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <IoTrash
+                            size={18}
+                            color={isSelected ? "#fff" : theme.danger}
+                          />
+                        </button>
+                      </>
                     )}
-                  </button>
-
-                  {addedPlaylists.some((x) => x.playlist === p.playlist) && (
-                    <>
-                      {" "}
-                      <button
-                        onClick={() => {
-                          const index = addedPlaylists.findIndex(
-                            (x) => x.playlist === p.playlist,
-                          );
-
-                          setEditIndex(index);
-                          setPlaylistName(p.name);
-                          setPlaylistUrl(p.playlist);
-                          setShowAdd(true);
-                        }}
-                        style={{
-                          marginRight: 6,
-                          padding: 6,
-                          borderRadius: 8,
-                          background: "transparent",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <IoPencil size={20} />
-                      </button>
-                      <button
-                        onClick={() => deletePlaylist(p)}
-                        style={{
-                          marginLeft: 10,
-                          padding: 6,
-                          borderRadius: 8,
-                          background: "transparent",
-                          border: "none",
-                          cursor: "pointer",
-                        }}
-                      >
-                        <IoTrash
-                          size={18}
-                          color={isSelected ? "#fff" : theme.danger}
-                        />
-                      </button>
-                    </>
-                  )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              })}
+            </div>
+            {/* SCROLLABLE AREA END */}
 
             <button
               onClick={() => setShowPlaylist(false)}
@@ -1180,6 +1233,7 @@ export default function IPTVWebFull() {
                 border: "none",
                 fontWeight: 700,
                 color: "#fff",
+                flexShrink: 0,
               }}
             >
               CLOSE
@@ -1205,82 +1259,72 @@ export default function IPTVWebFull() {
             style={{
               width: "100%",
               maxWidth: 420,
+              maxHeight: "80vh",
               backgroundColor: theme.card,
               borderRadius: 18,
               padding: 14,
               boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            {[
-              "All",
-              "movies",
-              "sports",
-              "music",
-              "news",
-              "kids",
-              "documentary",
-            ].map((c) => {
-              const isSelected = activeFilters.category === c;
+            {/* Scrollable category list */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                minHeight: 0,
+                padding: 10,
+              }}
+            >
+              {categories.map((c) => {
+                const isSelected = activeFilters.category === c;
 
-              return (
-                <button
-                  key={c}
-                  onClick={() => {
-                    setActiveFilters({ category: c });
-                    setShowCategory(false);
-                  }}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    borderRadius: 12,
-                    marginBottom: 6,
-                    textAlign: "left",
-                    border: "1px solid transparent",
-                    cursor: "pointer",
-
-                    background: isSelected
-                      ? `linear-gradient(135deg, ${theme.accent}20, rgba(0,0,0,0.2))`
-                      : "transparent",
-
-                    borderColor: isSelected
-                      ? `${theme.accent}55`
-                      : theme.border,
-
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background =
-                        "rgba(255,255,255,0.03)";
-                    }
-                    e.currentTarget.style.transform = "scale(1.01)";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.background = "transparent";
-                    }
-                    e.currentTarget.style.transform = "scale(1)";
-                  }}
-                >
-                  <span
+                return (
+                  <button
+                    key={c}
+                    onClick={() => {
+                      setActiveFilters({ category: c });
+                      setShowCategory(false);
+                    }}
                     style={{
-                      color: isSelected ? "#fff" : "#cbd5e1",
-                      fontWeight: 700,
-                      textTransform: "capitalize",
+                      width: "100%",
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      marginBottom: 6,
+                      textAlign: "left",
+                      border: "1px solid transparent",
+                      cursor: "pointer",
+                      background: isSelected
+                        ? `linear-gradient(135deg, ${theme.accent}20, rgba(0,0,0,0.2))`
+                        : "transparent",
+                      borderColor: isSelected
+                        ? `${theme.accent}55`
+                        : theme.border,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}
                   >
-                    {c}
-                  </span>
+                    <span
+                      style={{
+                        color: isSelected ? "#fff" : "#cbd5e1",
+                        fontWeight: 700,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {c}
+                    </span>
 
-                  {isSelected && (
-                    <span style={{ color: "#fff", fontWeight: 700 }}>✓</span>
-                  )}
-                </button>
-              );
-            })}
+                    {isSelected && (
+                      <span style={{ color: "#fff", fontWeight: 700 }}>✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
+            {/* Always visible */}
             <button
               onClick={() => setShowCategory(false)}
               style={{
@@ -1292,6 +1336,7 @@ export default function IPTVWebFull() {
                 border: "none",
                 color: "#fff",
                 fontWeight: 700,
+                flexShrink: 0,
               }}
             >
               CLOSE

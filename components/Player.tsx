@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 
 type PlayerProps = {
   url?: string | null;
-  playerMode: "web" | "vlc";
+  playerMode: "web" | "mpv";
 };
 
 export default function Player({ url, playerMode }: PlayerProps) {
@@ -13,7 +13,7 @@ export default function Player({ url, playerMode }: PlayerProps) {
 
   // ================= VLC MODE =================
   useEffect(() => {
-    if (playerMode !== "vlc") return;
+    if (playerMode !== "mpv") return;
     if (!url) return;
   }, [playerMode, url]);
 
@@ -78,6 +78,7 @@ export default function Player({ url, playerMode }: PlayerProps) {
           ref={videoRef}
           controls
           autoPlay
+          disablePictureInPicture={true}
           playsInline
           style={{ width: "100%", height: "100%" }}
         />
