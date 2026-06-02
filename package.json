@@ -35,6 +35,10 @@
       {
         "from": "electron/VLC",
         "to": "VLC"
+      },
+      {
+        "from": "electron/mpv",
+        "to": "mpv"
       }
     ]
   },

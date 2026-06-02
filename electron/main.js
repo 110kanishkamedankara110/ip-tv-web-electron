@@ -1,74 +1,172 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { app, BrowserWindow, ipcMain } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 const express = require("express");
-const kill = require("tree-kill"); // ✅ IMPORTANT
 const { default: axios } = require("axios");
+const { Menu } = require("electron");
 
 let mainWindow;
-let vlcProcess = null;
 let currentUrl = null;
 let staticServer = null;
 
-function getVlcPath() {
+let pipWindow = null;
+let mpvProcess = null;
+
+const { screen } = require("electron");
+
+function getMPVPath() {
   return app.isPackaged
-    ? path.join(process.resourcesPath, "VLC", "vlc.exe")
-    : path.join(__dirname, "VLC", "vlc.exe");
+    ? path.join(process.resourcesPath, "mpv", "mpv.exe")
+    : path.join(__dirname, "mpv", "mpv.exe");
 }
 
-function forceKillVLC() {
-  return new Promise((resolve) => {
-    const { exec } = require("child_process");
+function getPiPGeometry() {
+  const { height } = screen.getPrimaryDisplay().workAreaSize;
+  const { width } = screen.getPrimaryDisplay().workAreaSize;
+  const w = 360;
+  const h = 200;
 
-    exec("taskkill /F /IM vlc.exe /T", () => {
-      vlcProcess = null;
-      currentUrl = null;
-      resolve();
-    });
-  });
+  const x = width - w - 20; // bottom-left padding
+  const y = height - h - 40;
+
+  return `${w}x${h}+${x}+${y}`;
 }
-async function killVLC() {
-  if (!vlcProcess) {
-    await forceKillVLC();
-    return;
-  }
 
-  try {
-    vlcProcess.kill("SIGKILL");
-  } catch {}
+async function enterPiPMode(url) {
+  await killMPV();
 
-  vlcProcess = null;
+  mpvMode = "pip";
 
-  await forceKillVLC();
-}
-async function playVLC(url) {
-  await killVLC();
+  await new Promise((r) => setTimeout(r, 150));
 
-  await new Promise((r) => setTimeout(r, 200));
+  const mpvPath = getMPVPath();
 
-  const vlcPath = getVlcPath();
-
-  currentUrl = url;
-
-  vlcProcess = spawn(vlcPath, [
+  mpvProcess = spawn(mpvPath, [
     url,
-    "--no-video-title-show",
-    "--intf",
-    "qt",
-    "--vout",
-    "direct3d11",
+    "--force-window=immediate",
+    "--keep-open=yes",
+    "--osc=yes",
+    "--geometry=" + getPiPGeometry(),
   ]);
 
-  vlcProcess.on("exit", () => {
-    vlcProcess = null;
+  mpvProcess.on("exit", () => {
+    mpvProcess = null;
   });
 
-  vlcProcess.on("error", () => {
-    vlcProcess = null;
+  mpvProcess.on("error", () => {
+    mpvProcess = null;
   });
 }
-async function stopVLC() {
-  await killVLC();
+async function exitPiPMode() {
+  killMPV();
+  isPiPMode = false;
+  currentUrl = null;
+
+  if (!mpvProcess) return;
+
+  mpvProcess = null;
+}
+
+async function playMPV(url) {
+  await killMPV();
+
+  mpvMode = "normal";
+
+  await new Promise((r) => setTimeout(r, 150));
+
+  const mpvPath = getMPVPath();
+
+  mpvProcess = spawn(mpvPath, [
+    url,
+    "--force-window=immediate",
+    "--keep-open=yes",
+    "--osc=yes",
+    "--geometry=80%x80%",
+  ]);
+
+  mpvProcess.on("exit", () => {
+    mpvProcess = null;
+  });
+
+  mpvProcess.on("error", () => {
+    mpvProcess = null;
+  });
+}
+
+async function killMPV() {
+  if (!mpvProcess) return;
+  const proc = mpvProcess;
+  mpvProcess = null;
+
+  if (proc) {
+    try {
+      proc.kill("SIGKILL");
+    } catch {}
+  }
+
+  await new Promise((resolve) => {
+    const { exec } = require("child_process");
+    exec("taskkill /F /IM mpv.exe /T", () => resolve());
+  });
+}
+
+function closePiP() {
+  killMPV();
+  if (pipWindow) {
+    pipWindow.close();
+    pipWindow = null;
+  }
+}
+function createPiPWindow(url) {
+  if (pipWindow) {
+    closePiP();
+  }
+
+  const { screen } = require("electron");
+
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  const pipWidth = 360;
+  const pipHeight = 200;
+
+  pipWindow = new BrowserWindow({
+    width: pipWidth,
+    height: pipHeight,
+
+    x: width - pipWidth - 20,
+    y: height - pipHeight - 20,
+
+    frame: true,
+    resizable: true,
+    movable: true, // IMPORTANT
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    backgroundColor: "#000",
+    title: "FlowTv",
+    icon: path.join(__dirname, "assets/icon.ico"),
+
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  });
+  pipWindow.webContents.session.on(
+    "will-download",
+    (event, item, webContents) => {
+      event.preventDefault();
+      console.log("Blocked download:", item.getURL());
+    },
+  );
+  pipWindow.on("close", () => {
+    closePiP();
+  });
+
+  pipWindow.setMenu(null);
+
+  pipWindow.loadURL(url);
 }
 
 function startStaticServer() {
@@ -101,13 +199,36 @@ async function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
+  mainWindow.webContents.on("context-menu", () => {
+    Menu.buildFromTemplate([
+      { role: "copy" },
+      { role: "paste" },
+      { role: "cut" },
+      { type: "separator" },
+      { role: "selectAll" },
+    ]).popup();
+  });
+
+
   mainWindow.setMenu(null);
   await startStaticServer();
   mainWindow.loadURL("http://localhost:3000");
 }
 
-ipcMain.handle("play-vlc", async (_, url) => {
-  await playVLC(url);
+ipcMain.handle("play-mpv", async (_, url) => {
+  await playMPV(url);
+});
+
+ipcMain.handle("stop-mpv", async () => {
+  await killMPV();
+});
+
+ipcMain.handle("pip-enter", async (_, url) => {
+  await enterPiPMode(url);
+});
+
+ipcMain.handle("pip-exit", async () => {
+  await exitPiPMode();
 });
 
 ipcMain.handle("fetch-m3u", async (_, url) => {
@@ -127,10 +248,6 @@ ipcMain.handle("validate-m3u", async (_, url) => {
   }
 });
 
-ipcMain.handle("stop-vlc", async () => {
-  await stopVLC();
-});
-
 ipcMain.handle("set-window-size", (_, w, h) => {
   if (mainWindow) {
     mainWindow.setSize(w, h);
@@ -141,10 +258,20 @@ ipcMain.handle("get-current-url", () => {
   return currentUrl;
 });
 
+ipcMain.handle("open-pip", (_, url) => {
+  createPiPWindow(url);
+});
+
+ipcMain.handle("close-pip", () => {
+  closePiP();
+});
+
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", async () => {
-  await stopVLC();
+  await killMPV();
+  closePiP();
+  exitPiPMode();
 
   if (staticServer) {
     staticServer.close();
