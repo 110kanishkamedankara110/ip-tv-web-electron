@@ -163,36 +163,25 @@ function createPiPWindow(url) {
   pipWindow.loadURL(pipViewUrl);
 }
 
-function startStaticServer() {
-  const appServer = express();
+let currentStreamProcess = null;
 
-  appServer.use(
-    cors({
-      origin: "*",
-      methods: ["GET", "OPTIONS"],
-      allowedHeaders: ["Content-Type"],
-    }),
-  );
+function startStaticServer() {
+  const appExpress = express();
+  const streamExpress = express();
 
   const ffmpegPath = app.isPackaged
     ? path.join(process.resourcesPath, "ffmpeg", "bin", "ffmpeg.exe")
     : path.join(__dirname, "ffmpeg", "bin", "ffmpeg.exe");
 
-  const outPath = app.isPackaged
-    ? path.join(process.resourcesPath, "out")
-    : path.join(__dirname, "../out");
-  appServer.use(express.static(outPath));
-
-  // Track the active process globally so we can cancel it when channels switch
-  let currentStreamProcess = null;
-
-  appServer.get("/api/stream", (req, res) => {
+  streamExpress.get("/api/stream", (req, res) => {
     const streamUrl = req.query.url;
     if (!streamUrl) return res.status(400).send("No stream URL provided");
 
-    console.log("Piping instant direct stream for URL:", streamUrl);
+    console.log(
+      "Piping instant direct proxy stream over port 3001 for URL:",
+      streamUrl,
+    );
 
-    // 1. Force kill any previous process immediately so ports/connections free up
     if (currentStreamProcess) {
       try {
         currentStreamProcess.kill("SIGKILL");
@@ -200,12 +189,10 @@ function startStaticServer() {
       currentStreamProcess = null;
     }
 
-    // 2. Set strict headers for an endless video byte stream
-    res.setHeader("Content-Type", "video/mp4"); // Wrap as standard web MP4 fragments
+    res.setHeader("Content-Type", "video/mp4");
     res.setHeader("Connection", "keep-alive");
     res.setHeader("Cache-Control", "no-cache");
 
-    // 3. Spawn a direct real-time stream pipe (No file creation on your hard drive)
     currentStreamProcess = spawn(ffmpegPath, [
       "-reconnect",
       "1",
@@ -216,31 +203,28 @@ function startStaticServer() {
       "-reconnect_delay_max",
       "2",
       "-fflags",
-      "nobuffer+discardcorrupt", // Pull video data instantly from provider
+      "nobuffer+discardcorrupt",
       "-flags",
-      "low_delay", // Turn off codec lookahead analysis wait times
+      "low_delay",
       "-i",
       streamUrl,
       "-c:v",
-      "copy", // Instant video copy (0% CPU usage)
+      "copy",
       "-c:a",
-      "aac", // Encode audio to web-compatible AAC on the fly
+      "aac",
       "-f",
-      "mp4", // Use standard web MP4 container format
+      "mp4",
       "-movflags",
-      "empty_moov+default_base_moof+frag_keyframe+faststart", // Crucial: forces streaming fragments instantly
-      "pipe:1", // Output video bytes directly into the Node process memory instead of a file
+      "empty_moov+default_base_moof+frag_keyframe+faststart",
+      "pipe:1",
     ]);
 
-    // 4. Pipe the video bytes straight out to the frontend player
     currentStreamProcess.stdout.pipe(res);
 
-    // Handle process errors safely
     currentStreamProcess.on("error", (err) => {
       console.error("[Direct Stream Error]:", err.message);
     });
 
-    // 5. If the user changes channels or closes the player, terminate the worker instantly
     req.on("close", () => {
       console.log(
         "Player request severed. Killing background stream pipeline worker.",
@@ -254,10 +238,19 @@ function startStaticServer() {
     });
   });
 
+  const outPath = path.join(__dirname, "../out");
+
+  appExpress.use(express.static(outPath));
+
   return new Promise((resolve) => {
-    staticServer = appServer.listen(3001, () => {
+    staticServer = appExpress.listen(3000, () => {
+      console.log("Static server running on http://localhost:3000");
+      resolve();
+    });
+
+    streamServerInstance = streamExpress.listen(3001, () => {
       console.log(
-        "Static stream proxy server running on http://localhost:3001",
+        "Isolated Streaming data core running on http://localhost:3001",
       );
       resolve();
     });
