@@ -1,5 +1,4 @@
-'use client'
-import Hls from "hls.js";
+"use client";
 import React, { useEffect, useRef } from "react";
 
 type PlayerProps = {
@@ -9,51 +8,33 @@ type PlayerProps = {
 
 export default function Player({ url, playerMode }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const hlsRef = useRef<Hls | null>(null);
 
-  // ================= VLC MODE =================
   useEffect(() => {
-    if (playerMode !== "mpv") return;
-    if (!url) return;
+    if (playerMode !== "mpv" || !url) return;
   }, [playerMode, url]);
 
-  // ================= WEB MODE =================
   useEffect(() => {
     const video = videoRef.current;
+    if (playerMode !== "web" || !video || !url) return;
 
-    if (playerMode !== "web") return;
-    if (!video || !url) return;
+    const targetProxyUrl = `http://localhost:3001/api/stream?url=${encodeURIComponent(url)}`;
 
-    // cleanup safely
-    try {
-      hlsRef.current?.destroy();
-      hlsRef.current = null;
-    } catch {}
+    // Refresh video source cleanly
+    video.src = targetProxyUrl;
+    video.load();
 
-    video.src = "";
-
-    if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-      });
-
-      hlsRef.current = hls;
-      hls.loadSource(url);
-      hls.attachMedia(video);
-    } else {
-      video.src = url;
-    }
+    video.play().catch((err) => {
+      console.warn("Autoplay managed:", err.message);
+    });
 
     return () => {
-      try {
-        hlsRef.current?.destroy();
-        hlsRef.current = null;
-      } catch {}
+      if (video) {
+        video.pause();
+        video.src = "";
+      }
     };
   }, [url, playerMode]);
 
-  // ================= UI ONLY =================
   if (!url) {
     return (
       <div
@@ -66,21 +47,36 @@ export default function Player({ url, playerMode }: PlayerProps) {
           alignItems: "center",
         }}
       >
-        <span style={{ color: "#6F7AA6" }}>Select channel</span>
+        <span style={{ color: "#6F7AA6", fontFamily: "sans-serif" }}>
+          Select channel
+        </span>
       </div>
     );
   }
 
   return (
-    <div style={{ width: "100%", height: "100%", background: "#000" }}>
+    <div
+      style={{
+        width: "100%",
+        height: "100%",
+        background: "#000",
+        overflow: "hidden",
+      }}
+    >
       {playerMode === "web" && (
         <video
+          key={url}
           ref={videoRef}
           controls
           autoPlay
           disablePictureInPicture={true}
           playsInline
-          style={{ width: "100%", height: "100%" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain", // Keeps aspect ratio perfect inside tiny PiP windows
+            display: "block", // Removes extra browser padding spacing under inline components
+          }}
         />
       )}
     </div>

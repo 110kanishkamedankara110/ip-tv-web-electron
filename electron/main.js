@@ -5,6 +5,7 @@ const { spawn } = require("child_process");
 const express = require("express");
 const { default: axios } = require("axios");
 const { Menu } = require("electron");
+const cors = require("cors"); // IMPORTED: Cross-Origin handler middleware
 
 let mainWindow;
 let currentUrl = null;
@@ -36,14 +37,12 @@ function getPiPGeometry() {
 async function enterPiPMode(url) {
   await killMPV();
 
-  mpvMode = "pip";
-
   await new Promise((r) => setTimeout(r, 150));
 
   const mpvPath = getMPVPath();
-
+  const proxyUrl = `http://localhost:3001/api/stream?url=${encodeURIComponent(url)}`;
   mpvProcess = spawn(mpvPath, [
-    url,
+    proxyUrl,
     "--force-window=immediate",
     "--keep-open=yes",
     "--osc=yes",
@@ -60,7 +59,6 @@ async function enterPiPMode(url) {
 }
 async function exitPiPMode() {
   killMPV();
-  isPiPMode = false;
   currentUrl = null;
 
   if (!mpvProcess) return;
@@ -71,14 +69,12 @@ async function exitPiPMode() {
 async function playMPV(url) {
   await killMPV();
 
-  mpvMode = "normal";
-
   await new Promise((r) => setTimeout(r, 150));
 
   const mpvPath = getMPVPath();
-
+  const proxyUrl = `http://localhost:3001/api/stream?url=${encodeURIComponent(url)}`;
   mpvProcess = spawn(mpvPath, [
-    url,
+    proxyUrl,
     "--force-window=immediate",
     "--keep-open=yes",
     "--osc=yes",
@@ -122,63 +118,147 @@ function createPiPWindow(url) {
   if (pipWindow) {
     closePiP();
   }
-
-  const { screen } = require("electron");
-
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.workAreaSize;
 
   const pipWidth = 360;
-  const pipHeight = 200;
+  const pipHeight = 240;
 
   pipWindow = new BrowserWindow({
     width: pipWidth,
     height: pipHeight,
-
     x: width - pipWidth - 20,
     y: height - pipHeight - 20,
-
     frame: true,
     resizable: true,
-    movable: true, // IMPORTANT
+    movable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: "#000",
     title: "FlowTv",
     icon: path.join(__dirname, "assets/icon.ico"),
-
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  pipWindow.webContents.session.on(
-    "will-download",
-    (event, item, webContents) => {
-      event.preventDefault();
-      console.log("Blocked download:", item.getURL());
-    },
-  );
+
+  // Keep this safety handler active to block accidental file downloads
+  pipWindow.webContents.session.on("will-download", (event, item) => {
+    event.preventDefault();
+    console.log("Blocked accidental download:", item.getURL());
+  });
+
   pipWindow.on("close", () => {
     closePiP();
   });
 
   pipWindow.setMenu(null);
 
-  pipWindow.loadURL(url);
+  // THE CRITICAL FIX: Instead of loading the raw URL into the browser window,
+  // we point it to your local Next.js PiP page routing view (running on port 3000)
+  // and pass the raw stream URL safely inside the query string!
+  const pipViewUrl = `http://localhost:3000/pip?url=${encodeURIComponent(url)}`;
+  pipWindow.loadURL(pipViewUrl);
 }
 
 function startStaticServer() {
   const appServer = express();
 
-  const outPath = path.join(__dirname, "../out");
+  appServer.use(
+    cors({
+      origin: "*",
+      methods: ["GET", "OPTIONS"],
+      allowedHeaders: ["Content-Type"],
+    }),
+  );
 
+  const ffmpegPath = app.isPackaged
+    ? path.join(process.resourcesPath, "ffmpeg", "bin", "ffmpeg.exe")
+    : path.join(__dirname, "ffmpeg", "bin", "ffmpeg.exe");
+
+  const outPath = app.isPackaged
+    ? path.join(process.resourcesPath, "out")
+    : path.join(__dirname, "../out");
   appServer.use(express.static(outPath));
 
+  // Track the active process globally so we can cancel it when channels switch
+  let currentStreamProcess = null;
+
+  appServer.get("/api/stream", (req, res) => {
+    const streamUrl = req.query.url;
+    if (!streamUrl) return res.status(400).send("No stream URL provided");
+
+    console.log("Piping instant direct stream for URL:", streamUrl);
+
+    // 1. Force kill any previous process immediately so ports/connections free up
+    if (currentStreamProcess) {
+      try {
+        currentStreamProcess.kill("SIGKILL");
+      } catch (e) {}
+      currentStreamProcess = null;
+    }
+
+    // 2. Set strict headers for an endless video byte stream
+    res.setHeader("Content-Type", "video/mp4"); // Wrap as standard web MP4 fragments
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Cache-Control", "no-cache");
+
+    // 3. Spawn a direct real-time stream pipe (No file creation on your hard drive)
+    currentStreamProcess = spawn(ffmpegPath, [
+      "-reconnect",
+      "1",
+      "-reconnect_at_eof",
+      "1",
+      "-reconnect_streamed",
+      "1",
+      "-reconnect_delay_max",
+      "2",
+      "-fflags",
+      "nobuffer+discardcorrupt", // Pull video data instantly from provider
+      "-flags",
+      "low_delay", // Turn off codec lookahead analysis wait times
+      "-i",
+      streamUrl,
+      "-c:v",
+      "copy", // Instant video copy (0% CPU usage)
+      "-c:a",
+      "aac", // Encode audio to web-compatible AAC on the fly
+      "-f",
+      "mp4", // Use standard web MP4 container format
+      "-movflags",
+      "empty_moov+default_base_moof+frag_keyframe+faststart", // Crucial: forces streaming fragments instantly
+      "pipe:1", // Output video bytes directly into the Node process memory instead of a file
+    ]);
+
+    // 4. Pipe the video bytes straight out to the frontend player
+    currentStreamProcess.stdout.pipe(res);
+
+    // Handle process errors safely
+    currentStreamProcess.on("error", (err) => {
+      console.error("[Direct Stream Error]:", err.message);
+    });
+
+    // 5. If the user changes channels or closes the player, terminate the worker instantly
+    req.on("close", () => {
+      console.log(
+        "Player request severed. Killing background stream pipeline worker.",
+      );
+      if (currentStreamProcess) {
+        try {
+          currentStreamProcess.kill("SIGKILL");
+        } catch (e) {}
+        currentStreamProcess = null;
+      }
+    });
+  });
+
   return new Promise((resolve) => {
-    staticServer = appServer.listen(3000, () => {
-      console.log("Static server running on http://localhost:3000");
+    staticServer = appServer.listen(3001, () => {
+      console.log(
+        "Static stream proxy server running on http://localhost:3001",
+      );
       resolve();
     });
   });
@@ -208,7 +288,6 @@ async function createWindow() {
       { role: "selectAll" },
     ]).popup();
   });
-
 
   mainWindow.setMenu(null);
   await startStaticServer();
@@ -280,3 +359,7 @@ app.on("window-all-closed", async () => {
 
   if (process.platform !== "darwin") app.quit();
 });
+
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+app.commandLine.appendSwitch("disable-web-security");
+app.commandLine.appendSwitch("allow-running-insecure-content");

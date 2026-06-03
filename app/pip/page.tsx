@@ -14,14 +14,15 @@ export default function PiP() {
   return (
     <div
       style={{
-        width: "100%",
-        height: "100%",
+        width: "100vw",
+        height: "100vh",
         background: "#000",
-        position: "relative",
-        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden", // Crucial: Completely clips scroll bars globally
       }}
     >
-      {/* 🔥 DRAG AREA (TOP BAR) */}
+      {/* 📺 DRAG AREA (TOP BAR) */}
       <div
         style={{
           height: 30,
@@ -32,6 +33,8 @@ export default function PiP() {
           paddingLeft: 10,
           fontSize: 12,
           color: "#aaa",
+          flexShrink: 0, // Blocks the title bar from collapsing or shrinking
+          userSelect: "none",
         }}
       >
         📺 PiP Mode
@@ -41,12 +44,13 @@ export default function PiP() {
       <div
         style={{
           width: "100%",
-          height: "calc(100% - 30px)",
+          flexGrow: 1, // Automatically forces this layout frame to take up 100% of remaining space perfectly
           position: "relative",
+          overflow: "hidden",
         }}
       >
         {url ? (
-          <Player url={url}  playerMode={"web"} />
+          <Player url={url} playerMode={"web"} />
         ) : (
           <div
             style={{
@@ -57,6 +61,7 @@ export default function PiP() {
               alignItems: "center",
               color: "#666",
               fontSize: 12,
+              fontFamily: "sans-serif",
             }}
           >
             No stream loaded

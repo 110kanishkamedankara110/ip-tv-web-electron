@@ -1,1 +1,2 @@
 electron/mpv/mpv.exe filter=lfs diff=lfs merge=lfs -text
+electron/ffmpeg/bin/*.exe filter=lfs diff=lfs merge=lfs -text
