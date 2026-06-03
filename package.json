@@ -39,6 +39,10 @@
       {
         "from": "electron/mpv",
         "to": "mpv"
+      },
+      {
+        "from": "electron/ffmpeg",
+        "to": "ffmpeg"
       }
     ]
   },
