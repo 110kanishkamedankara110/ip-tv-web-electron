@@ -5,8 +5,6 @@ const { spawn } = require("child_process");
 const express = require("express");
 const { default: axios } = require("axios");
 const { Menu } = require("electron");
-const ffmpeg = require("fluent-ffmpeg");
-const fs = require("fs");
 const cors = require("cors"); // IMPORTED: Cross-Origin handler middleware
 
 let mainWindow;
