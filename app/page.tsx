@@ -320,8 +320,10 @@ export default function IPTVWebFull() {
       if (!isValid) {
         showToast("Playlist is not responding", "error");
         setLoading(false);
-        setPlaylistName("");
-        setPlaylistUrl("");
+        if (editIndex == null) {
+          setPlaylistName("");
+          setPlaylistUrl("");
+        }
       } else {
         if (editIndex !== null) {
           const updated = [...addedPlaylists];
@@ -1084,6 +1086,40 @@ export default function IPTVWebFull() {
               flexDirection: "column",
             }}
           >
+            <div style={{ width: "100%" }}>
+              <button
+                onClick={() => setShowAdd(true)}
+                style={{
+                  width: 42,
+                  height: 42,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 14,
+                  background:
+                    "linear-gradient(145deg, rgba(17,28,51,0.9), rgba(11,18,32,0.9))",
+                  border: "1px solid #1F2A44",
+                  cursor: "pointer",
+                  color: theme.span,
+                  transition: "all 0.2s ease",
+                  boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
+                }}
+                onMouseEnter={(e) => {
+                  const el = e.currentTarget;
+                  el.style.transform = "scale(1.12)";
+                  el.style.boxShadow = `0 0 18px #7CFF6B33, 0 10px 25px rgba(0,0,0,0.5)`;
+                  el.style.borderColor = "#7CFF6B";
+                }}
+                onMouseLeave={(e) => {
+                  const el = e.currentTarget;
+                  el.style.transform = "scale(1)";
+                  el.style.boxShadow = "0 6px 18px rgba(0,0,0,0.35)";
+                  el.style.borderColor = "#1F2A44";
+                }}
+              >
+                <IoAdd size={18} />
+              </button>
+            </div>
             {/* SCROLLABLE AREA START */}
             <div
               style={{
