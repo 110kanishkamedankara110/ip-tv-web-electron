@@ -159,7 +159,7 @@ function createPiPWindow(url) {
   // THE CRITICAL FIX: Instead of loading the raw URL into the browser window,
   // we point it to your local Next.js PiP page routing view (running on port 3000)
   // and pass the raw stream URL safely inside the query string!
-  const pipViewUrl = `http://localhost:3000/pip?url=${encodeURIComponent(url)}`;
+  const pipViewUrl = `http://localhost:3000/pip.html?url=${encodeURIComponent(url)}`;
   pipWindow.loadURL(pipViewUrl);
 }
 

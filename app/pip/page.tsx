@@ -22,24 +22,7 @@ export default function PiP() {
         overflow: "hidden", // Crucial: Completely clips scroll bars globally
       }}
     >
-      {/* 📺 DRAG AREA (TOP BAR) */}
-      <div
-        style={{
-          height: 30,
-          width: "100%",
-          background: "#111",
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: 10,
-          fontSize: 12,
-          color: "#aaa",
-          flexShrink: 0, // Blocks the title bar from collapsing or shrinking
-          userSelect: "none",
-        }}
-      >
-        📺 PiP Mode
-      </div>
-
+      
       {/* 🎥 VIDEO AREA */}
       <div
         style={{
