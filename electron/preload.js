@@ -7,8 +7,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   validateM3U: (url) => ipcRenderer.invoke("validate-m3u", url),
   openPiP: (url) => ipcRenderer.invoke("open-pip", url),
   closePiP: () => ipcRenderer.invoke("close-pip"),
-  playMpv: (url) => ipcRenderer.invoke("play-mpv", url),
-  stopMpv: () => ipcRenderer.invoke("stop-mpv"),
+  playvlc: (url) => ipcRenderer.invoke("play-vlc", url),
+  stopvlc: () => ipcRenderer.invoke("stop-vlc"),
   enterPiPMode: (url) => ipcRenderer.invoke("pip-enter", url),
   exitPiPMode: () => ipcRenderer.invoke("pip-exit"),
 });

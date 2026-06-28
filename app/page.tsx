@@ -43,7 +43,7 @@ export const theme = {
 
 const FAVORITES_KEY = "@fav";
 const ADDED_KEY = "@added_playlists";
-
+const allowPlayerSelect = false;
 export default function IPTVWebFull() {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +59,7 @@ export default function IPTVWebFull() {
     category: "All",
   });
 
-  const [playerMode, setPlayerMode] = useState<"web" | "mpv">("web");
+  const [playerMode, setPlayerMode] = useState<"web" | "vlc">("vlc");
   const [current, setCurrent] = useState<Channel | null>(null);
 
   const [showPlaylist, setShowPlaylist] = useState(false);
@@ -150,7 +150,7 @@ export default function IPTVWebFull() {
 
   useEffect(() => {
     return () => {
-      window?.electronAPI?.stopMpv();
+      window?.electronAPI?.stopvlc();
     };
   }, []);
 
@@ -203,6 +203,19 @@ export default function IPTVWebFull() {
   };
 
   useEffect(() => {
+    if (!window.electronAPI) return;
+    const isvlc = playerMode === "vlc";
+
+    if (!isvlc) {
+      window.electronAPI.setWindowSize(isPip ? 420 : 1200, 800);
+      setShowPlayer(isPip ? false : true);
+    } else {
+      window.electronAPI.setWindowSize(420, 800);
+      setShowPlayer(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchChannels();
     localStorage.setItem("SELECTED_PLAYLIST", JSON.stringify(selectedPlaylist));
   }, [selectedPlaylist, activeFilters.category]);
@@ -232,11 +245,11 @@ export default function IPTVWebFull() {
     const url = current?.location || "";
 
     if (!url) return;
-    const isMpv = playerMode === "mpv";
+    const isvlc = playerMode === "vlc";
 
-    if (!isMpv) {
+    if (!isvlc) {
       window.electronAPI.setWindowSize(isPip ? 420 : 1200, 800);
-      window.electronAPI.stopMpv();
+      window.electronAPI.stopvlc();
       window.electronAPI.exitPiPMode();
       if (isPip) {
         window.electronAPI.openPiP(url);
@@ -253,7 +266,7 @@ export default function IPTVWebFull() {
       } else {
         window.electronAPI.exitPiPMode();
         if (url) {
-          window.electronAPI.playMpv(url);
+          window.electronAPI.playvlc(url);
         }
       }
       setShowPlayer(false);
@@ -262,7 +275,7 @@ export default function IPTVWebFull() {
 
   useEffect(() => {
     return () => {
-      window?.electronAPI?.stopMpv();
+      window?.electronAPI?.stopvlc();
     };
   }, []);
 
@@ -479,87 +492,91 @@ export default function IPTVWebFull() {
           padding: 10,
         }}
       >
-        <button
-          onClick={() => setPlayerMode(playerMode === "web" ? "mpv" : "web")}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            marginBottom: 10,
-
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 10,
-
-            borderRadius: 12,
-            cursor: "pointer",
-
-            background:
-              "linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
-
-            border: `1px solid ${
-              playerMode === "web" ? theme.accent : theme.border
-            }`,
-
-            boxShadow:
-              playerMode === "web"
-                ? "0 0 18px rgba(0,245,212,0.15)"
-                : "0 8px 20px rgba(0,0,0,0.35)",
-
-            color: theme.span,
-
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-1px)";
-            e.currentTarget.style.borderColor = theme.accent;
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "translateY(0px)";
-            e.currentTarget.style.borderColor =
-              playerMode === "web" ? theme.accent : theme.border;
-          }}
-        >
-          <div
+        {allowPlayerSelect && (
+          <button
+            onClick={() => setPlayerMode(playerMode === "web" ? "vlc" : "web")}
             style={{
+              width: "100%",
+              padding: "10px 12px",
+              marginBottom: 10,
+
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: playerMode === "web" ? theme.accent : theme.muted,
+              gap: 10,
+
+              borderRadius: 12,
+              cursor: "pointer",
+
+              background:
+                "linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
+
+              border: `1px solid ${
+                playerMode === "web" ? theme.accent : theme.border
+              }`,
+
+              boxShadow:
+                playerMode === "web"
+                  ? "0 0 18px rgba(0,245,212,0.15)"
+                  : "0 8px 20px rgba(0,0,0,0.35)",
+
+              color: theme.span,
+
               transition: "all 0.2s ease",
             }}
-          >
-            {playerMode === "web" ? (
-              <IoGlobeOutline size={18} />
-            ) : (
-              <IoDesktopOutline size={18} />
-            )}
-          </div>
-
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              letterSpacing: 0.5,
-              color: playerMode === "web" ? theme.accent : theme.span,
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-1px)";
+              e.currentTarget.style.borderColor = theme.accent;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "translateY(0px)";
+              e.currentTarget.style.borderColor =
+                playerMode === "web" ? theme.accent : theme.border;
             }}
           >
-            {playerMode === "web" ? "WEB PLAYER" : "MPV MODE"}
-          </span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: playerMode === "web" ? theme.accent : theme.muted,
+                transition: "all 0.2s ease",
+              }}
+            >
+              {playerMode === "web" ? (
+                <IoGlobeOutline size={18} />
+              ) : (
+                <IoDesktopOutline size={18} />
+              )}
+            </div>
 
-          <div
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 10,
-              marginLeft: "auto",
-              backgroundColor:
-                playerMode === "web" ? theme.accent : theme.muted,
-              boxShadow:
-                playerMode === "web" ? "0 0 10px rgba(0,245,212,0.8)" : "none",
-            }}
-          />
-        </button>
+            <span
+              style={{
+                fontSize: 12,
+                fontWeight: 600,
+                letterSpacing: 0.5,
+                color: playerMode === "web" ? theme.accent : theme.span,
+              }}
+            >
+              {playerMode === "web" ? "WEB PLAYER" : "vlc MODE"}
+            </span>
+
+            <div
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 10,
+                marginLeft: "auto",
+                backgroundColor:
+                  playerMode === "web" ? theme.accent : theme.muted,
+                boxShadow:
+                  playerMode === "web"
+                    ? "0 0 10px rgba(0,245,212,0.8)"
+                    : "none",
+              }}
+            />
+          </button>
+        )}
 
         <div style={{ padding: 10 }}>
           <div

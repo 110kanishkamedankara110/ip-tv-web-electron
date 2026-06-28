@@ -8,8 +8,8 @@ declare global {
       validateM3U: (url: string) => Promise<boolean>;
       openPiP: (url: string) => void;
       closePiP: () => void;
-      playMpv: (url: string) => void;
-      stopMpv: () => void;
+      playvlc: (url: string) => void;
+      stopvlc: () => void;
       enterPiPMode: (url: string) => void;
       exitPiPMode: () => void;
     };
