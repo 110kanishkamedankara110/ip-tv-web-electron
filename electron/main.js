@@ -12,88 +12,114 @@ let currentUrl = null;
 let staticServer = null;
 
 let pipWindow = null;
-let mpvProcess = null;
+let vlcProcess = null;
 
 const { screen } = require("electron");
 
-function getMPVPath() {
+function getvlcPath() {
   return app.isPackaged
-    ? path.join(process.resourcesPath, "mpv", "mpv.exe")
-    : path.join(__dirname, "mpv", "mpv.exe");
-}
-
-function getPiPGeometry() {
-  const { height } = screen.getPrimaryDisplay().workAreaSize;
-  const { width } = screen.getPrimaryDisplay().workAreaSize;
-  const w = 360;
-  const h = 200;
-
-  const x = width - w - 20; // bottom-left padding
-  const y = height - h - 40;
-
-  return `${w}x${h}+${x}+${y}`;
+    ? path.join(process.resourcesPath, "VLC", "vlc.exe")
+    : path.join(__dirname, "VLC", "vlc.exe");
 }
 
 async function enterPiPMode(url) {
-  await killMPV();
-
+  await killvlc();
   await new Promise((r) => setTimeout(r, 150));
 
-  const mpvPath = getMPVPath();
-  const proxyUrl = `http://localhost:3001/api/stream?url=${encodeURIComponent(url)}`;
-  mpvProcess = spawn(mpvPath, [
-    proxyUrl,
-    "--force-window=immediate",
-    "--keep-open=yes",
-    "--osc=yes",
-    "--geometry=" + getPiPGeometry(),
+  const vlcPath = getvlcPath();
+
+  vlcProcess = spawn(vlcPath, [
+    // 1. FORCE THE CONTROLLER ENGINE INTF
+    "--intf=qt",
+    "--vout=direct3d11",
+    "--embedded-video",
+
+    // 2. PIP WINDOW LAYOUT & STYLE PINNING
+    "--no-fullscreen",
+    "--no-video-title-show",
+    "--no-video-deco",
+    "--video-on-top",
+    "--qt-minimal-view", 
+
+    // 3. HARD INTERFACE GEOMETRY LOCKS (FORCES UNIFORM SIZE)
+    "--no-qt-video-autoresize",
+    "--autoscale",
+    "--width=360",
+    "--height=200",
+    "--aspect-ratio=16:9",
+
+    // 4. BUFFERING STABILITY
+    "--network-caching=800",
+    "--live-caching=800",
+    "--file-caching=800",
+
+    // 5. CLEAN PIP INTERFACE (NO POPUPS)
+    "--quiet",
+    "--no-osd",
+    "--no-qt-error-dialogs",
+    "--no-qt-privacy-ask",
+    "--no-qt-fs-controller",
+
+    // 6. TARGET STREAM MEDIA URL
+    url,
   ]);
 
-  mpvProcess.on("exit", () => {
-    mpvProcess = null;
-  });
-
-  mpvProcess.on("error", () => {
-    mpvProcess = null;
-  });
+  vlcProcess.on("exit", () => (vlcProcess = null));
+  vlcProcess.on("error", () => (vlcProcess = null));
 }
+
+
 async function exitPiPMode() {
-  killMPV();
+  killvlc();
   currentUrl = null;
 
-  if (!mpvProcess) return;
+  if (!vlcProcess) return;
 
-  mpvProcess = null;
+  vlcProcess = null;
 }
 
-async function playMPV(url) {
-  await killMPV();
-
+async function playvlc(url) {
+  await killvlc();
   await new Promise((r) => setTimeout(r, 150));
 
-  const mpvPath = getMPVPath();
-  const proxyUrl = `http://localhost:3001/api/stream?url=${encodeURIComponent(url)}`;
-  mpvProcess = spawn(mpvPath, [
-    proxyUrl,
-    "--force-window=immediate",
-    "--keep-open=yes",
-    "--osc=yes",
-    "--geometry=80%x80%",
+  const vlcPath = getvlcPath();
+
+  vlcProcess = spawn(vlcPath, [
+    // 1. FORCE THE CONTROLLER ENGINE INTF
+    "--intf=qt",
+    "--vout=direct3d11",
+    "--avcodec-hw=none",
+
+    // 2. FORCE SINGLE INTERACTIVE WINDOW CONTAINER
+    "--embedded-video",
+    "--video-deco",
+    "--no-fullscreen",
+    "--no-video-title-show",
+    "--no-video-on-top", // FIXED: This is the correct flag to stop window pinning
+
+    // 3. BUFFERING STABILITY
+    "--network-caching=1000",
+    "--live-caching=1000",
+    "--file-caching=1000",
+
+    // 4. SUPPRESS OTHER LOG POPUPS
+    "--quiet",
+    "--no-osd",
+    "--no-qt-error-dialogs",
+    "--no-qt-privacy-ask",
+
+    // 5. MEDIA URL TARGET
+    url,
   ]);
 
-  mpvProcess.on("exit", () => {
-    mpvProcess = null;
-  });
-
-  mpvProcess.on("error", () => {
-    mpvProcess = null;
-  });
+  vlcProcess.on("exit", () => (vlcProcess = null));
+  vlcProcess.on("error", () => (vlcProcess = null));
 }
 
-async function killMPV() {
-  if (!mpvProcess) return;
-  const proc = mpvProcess;
-  mpvProcess = null;
+async function killvlc() {
+  if (!vlcProcess) return;
+  const proc = vlcProcess;
+  vlcProcess = null;
 
   if (proc) {
     try {
@@ -103,40 +129,39 @@ async function killMPV() {
 
   await new Promise((resolve) => {
     const { exec } = require("child_process");
-    exec("taskkill /F /IM mpv.exe /T", () => resolve());
+    exec("taskkill /F /IM vlc.exe /T", () => resolve());
   });
 }
 
 function closePiP() {
-  killMPV();
+  killvlc();
   if (pipWindow) {
     pipWindow.close();
     pipWindow = null;
   }
 }
 function createPiPWindow(url) {
-  if (pipWindow) {
-    closePiP();
-  }
-  const primaryDisplay = screen.getPrimaryDisplay();
-  const { width, height } = primaryDisplay.workAreaSize;
+  if (pipWindow) closePiP();
 
-  const pipWidth = 360;
-  const pipHeight = 240;
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+
+  const pipWidth = 320;
+  const pipHeight = 180;
 
   pipWindow = new BrowserWindow({
     width: pipWidth,
     height: pipHeight,
+
     x: width - pipWidth - 20,
     y: height - pipHeight - 20,
-    frame: true,
+
+    frame: false, // 👈 real PiP feel
     resizable: true,
     movable: true,
     alwaysOnTop: true,
     skipTaskbar: true,
     backgroundColor: "#000",
-    title: "FlowTv",
-    icon: path.join(__dirname, "assets/icon.ico"),
+
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -144,23 +169,15 @@ function createPiPWindow(url) {
     },
   });
 
-  // Keep this safety handler active to block accidental file downloads
-  pipWindow.webContents.session.on("will-download", (event, item) => {
-    event.preventDefault();
-    console.log("Blocked accidental download:", item.getURL());
-  });
-
-  pipWindow.on("close", () => {
-    closePiP();
-  });
-
   pipWindow.setMenu(null);
 
-  // THE CRITICAL FIX: Instead of loading the raw URL into the browser window,
-  // we point it to your local Next.js PiP page routing view (running on port 3000)
-  // and pass the raw stream URL safely inside the query string!
-  const pipViewUrl = `http://localhost:3000/pip.html?url=${encodeURIComponent(url)}`;
-  pipWindow.loadURL(pipViewUrl);
+  pipWindow.loadURL(
+    `http://localhost:3000/pip.html?url=${encodeURIComponent(url)}`,
+  );
+
+  pipWindow.on("closed", () => {
+    pipWindow = null;
+  });
 }
 
 let currentStreamProcess = null;
@@ -287,12 +304,12 @@ async function createWindow() {
   mainWindow.loadURL("http://localhost:3000");
 }
 
-ipcMain.handle("play-mpv", async (_, url) => {
-  await playMPV(url);
+ipcMain.handle("play-vlc", async (_, url) => {
+  await playvlc(url);
 });
 
-ipcMain.handle("stop-mpv", async () => {
-  await killMPV();
+ipcMain.handle("stop-vlc", async () => {
+  await killvlc();
 });
 
 ipcMain.handle("pip-enter", async (_, url) => {
@@ -341,7 +358,7 @@ ipcMain.handle("close-pip", () => {
 app.whenReady().then(createWindow);
 
 app.on("window-all-closed", async () => {
-  await killMPV();
+  await killvlc();
   closePiP();
   exitPiPMode();
 

@@ -3,14 +3,14 @@ import React, { useEffect, useRef } from "react";
 
 type PlayerProps = {
   url?: string | null;
-  playerMode: "web" | "mpv";
+  playerMode: "web" | "vlc";
 };
 
 export default function Player({ url, playerMode }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    if (playerMode !== "mpv" || !url) return;
+    if (playerMode !== "vlc" || !url) return;
   }, [playerMode, url]);
 
   useEffect(() => {
